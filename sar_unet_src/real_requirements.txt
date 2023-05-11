@@ -1,0 +1,14 @@
+# If you are using the Ubuntu 20.04 Deep Learning AMI with Pytorch 2.0.0, all that is required is the following:
+
+pytorch-lightning
+segmentation_models_pytorch
+
+xarray
+rasterio
+geocube
+zarr
+fsspec
+geopandas
+netcdf4
+rioxarray
+xbatcher
