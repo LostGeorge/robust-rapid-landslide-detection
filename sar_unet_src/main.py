@@ -32,6 +32,7 @@ def add_BeforeAfterCubeDataModule_args(parent_parser):
     # parser.add_argument("--target", type=str, default='landslides')
     # parser.add_argument("--train_val_test_split", type=str, default='0.7_0.2_0.1')
     parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--num_workers", type=int, default=0)
     # parser.add_argument("--include_negatives", type=bool, default=False)
     return parent_parser
 
@@ -70,7 +71,8 @@ if __name__ == '__main__':
         target='landslides',
         train_val_test_split=(0.7, 0.2, 0.1),
         batch_size=hparams.batch_size,
-        include_negatives=False
+        include_negatives=False,
+        num_workers=hparams.num_workers
     )
 
     # create the plUNET from the appropriate parsed arguments
