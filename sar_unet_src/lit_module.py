@@ -38,12 +38,6 @@ class plUNET(pl.LightningModule):
         self.test_auprc = AveragePrecision(task='binary', pos_label=1)
         self.test_f1 = F1Score(task='binary')
 
-        self.train_positive_count = 0
-        self.val_positive_count = 0
-        self.test_positive_count = 0
-        self.train_negative_count = 0
-        self.val_negative_count = 0
-        self.test_negative_count = 0
 
     def forward(self, x: torch.Tensor):
         return self.net(x)
