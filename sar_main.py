@@ -4,12 +4,14 @@ by Boehm et. al 2022, NIPS workshop on Tackling Climate Change with Machine Lear
 https://github.com/iprapas/landslide-sar-unet
 '''
 
-from lit_module import plUNET
-from datamodule import BeforeAfterCubeDataModule
+from sar_unet_src.lit_module import plUNET
+from sar_unet_src.datamodule import BeforeAfterCubeDataModule
 import pytorch_lightning as pl
 import torch
 import argparse
 import sys
+
+import utils
 
 
 # a function to read plUNET parameters as program arguments
@@ -23,7 +25,7 @@ def add_plUNET_args(parent_parser):
 
 def add_BeforeAfterCubeDataModule_args(parent_parser):
     parser = parent_parser.add_argument_group("BeforeAfterCubeDataModule")
-    parser.add_argument("--ds_path", type=str, default='/datacube/hokkaido_japan.zarr')
+    parser.add_argument("--ds_path", type=str, default='data/hokkaido_japan.zarr')
     parser.add_argument("--ba_vars", type=str, default='vv,vh')
     parser.add_argument("--timestep_length", type=int, default=4)
     # parser.add_argument("--event_start_date", type=str, default='20180905')
@@ -58,7 +60,7 @@ if __name__ == '__main__':
 
     # run the main function
     print(hparams)
-    pl.seed_everything(42)
+    utils.seed_everything(0)
     # create the datamodule from the appropriate parsed arguments
     dm = BeforeAfterCubeDataModule(
         ds_path=hparams.ds_path,
@@ -87,4 +89,6 @@ if __name__ == '__main__':
     trainer = pl.Trainer(max_epochs=hparams.max_epochs)
 
     # train the model
-    trainer.fit(model, dm)
+    trainer.fit(model, datamodule=dm)
+    trainer.validate(datamodule=dm)
+    trainer.test(datamodule=dm)
