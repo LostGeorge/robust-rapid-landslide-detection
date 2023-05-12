@@ -21,7 +21,8 @@ def before_after_ds(ds_path, ba_vars, aggregation, timestep_length, event_start_
     ds = xr.open_zarr(ds_path)
     for var in ba_vars:
         ds[var] = np.log(ds[var])
-    ds = ds.where(ds['sat:orbit_state'] == 'd', drop=True)
+    orbit_state_bool_arr = (ds['sat:orbit_state'] == 'd').compute()
+    ds = ds.where(orbit_state_bool_arr, drop=True)
     before_ds = ds.drop_dims('timepair').sel(timestep=slice(None, event_start_date))
     after_ds = ds.drop_dims('timepair').sel(timestep=slice(event_end_date, None))
 
@@ -180,7 +181,6 @@ class BeforeAfterCubeDataModule(LightningDataModule):
             self.data_train, self.data_val, self.data_test = random_split(
                 dataset=dataset,
                 lengths=train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
             )
 
             print("*" * 20)
@@ -188,7 +188,7 @@ class BeforeAfterCubeDataModule(LightningDataModule):
             print("*" * 20)
 
     def train_dataloader(self):
-        return MultiEpochsDataLoader(
+        return torch.utils.data.DataLoader(
             dataset=self.data_train,
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers,
@@ -198,7 +198,7 @@ class BeforeAfterCubeDataModule(LightningDataModule):
         )
 
     def val_dataloader(self):
-        return MultiEpochsDataLoader(
+        return torch.utils.data.DataLoader(
             dataset=self.data_val,
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers,
@@ -208,7 +208,7 @@ class BeforeAfterCubeDataModule(LightningDataModule):
         )
 
     def test_dataloader(self):
-        return MultiEpochsDataLoader(
+        return torch.utils.data.DataLoader(
             dataset=self.data_test,
             batch_size=self.hparams.batch_size,
             num_workers=self.hparams.num_workers,
@@ -218,32 +218,32 @@ class BeforeAfterCubeDataModule(LightningDataModule):
         )
 
 
-class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+# class MultiEpochsDataLoader(torch.utils.data.DataLoader):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._DataLoader__initialized = False
-        self.batch_sampler = _RepeatSampler(self.batch_sampler)
-        self._DataLoader__initialized = True
-        self.iterator = super().__iter__()
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self._DataLoader__initialized = False
+#         self.batch_sampler = _RepeatSampler(self.batch_sampler)
+#         self._DataLoader__initialized = True
+#         self.iterator = super().__iter__()
 
-    def __len__(self):
-        return len(self.batch_sampler.sampler)
+#     def __len__(self):
+#         return len(self.batch_sampler.sampler)
 
-    def __iter__(self):
-        for i in range(len(self)):
-            yield next(self.iterator)
+#     def __iter__(self):
+#         for i in range(len(self)):
+#             yield next(self.iterator)
 
 
-class _RepeatSampler(object):
-    """ Sampler that repeats forever.
-    Args:
-        sampler (Sampler)
-    """
+# class _RepeatSampler(object):
+#     """ Sampler that repeats forever.
+#     Args:
+#         sampler (Sampler)
+#     """
 
-    def __init__(self, sampler):
-        self.sampler = sampler
+#     def __init__(self, sampler):
+#         self.sampler = sampler
 
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)
+#     def __iter__(self):
+#         while True:
+#             yield from iter(self.sampler)

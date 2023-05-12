@@ -28,22 +28,16 @@ class plUNET(pl.LightningModule):
         elif loss == 'ce':
             self.criterion = torch.nn.CrossEntropyLoss()
 
-        self.train_auc = AUROC(pos_label=1, num_classes=2)
-        self.train_f1 = F1Score()
-        self.train_auprc = AveragePrecision(pos_label=1, num_classes=1)
-        self.val_auc = AUROC(pos_label=1, num_classes=2)
-        self.val_f1 = F1Score()
-        self.val_auprc = AveragePrecision(pos_label=1, num_classes=1)
-        self.test_auc = AUROC(pos_label=1, num_classes=2)
-        self.test_auprc = AveragePrecision(pos_label=1, num_classes=1)
-        self.test_f1 = F1Score()
+        self.train_auc = AUROC(task='binary', pos_label=1)
+        self.train_f1 = F1Score(task='binary')
+        self.train_auprc = AveragePrecision(task='binary', pos_label=1)
+        self.val_auc = AUROC(task='binary', pos_label=1)
+        self.val_f1 = F1Score(task='binary')
+        self.val_auprc = AveragePrecision(task='binary', pos_label=1)
+        self.test_auc = AUROC(task='binary', pos_label=1)
+        self.test_auprc = AveragePrecision(task='binary', pos_label=1)
+        self.test_f1 = F1Score(task='binary')
 
-        self.train_positive_count = 0
-        self.val_positive_count = 0
-        self.test_positive_count = 0
-        self.train_negative_count = 0
-        self.val_negative_count = 0
-        self.test_negative_count = 0
 
     def forward(self, x: torch.Tensor):
         return self.net(x)
@@ -68,7 +62,7 @@ class plUNET(pl.LightningModule):
         self.log("train/f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False)
         return {"loss": loss, "preds": preds, "targets": targets, "inputs": inputs}
 
-    def training_epoch_end(self, outputs: List[Any]):
+    def on_training_epoch_end(self):
         pass
 
     def validation_step(self, batch: Any, batch_idx: int):
@@ -97,7 +91,7 @@ class plUNET(pl.LightningModule):
         self.log("test/f1", self.test_f1, on_step=False, on_epoch=True, prog_bar=False)
         return {"loss": loss, "preds": preds, "targets": targets}
 
-    def test_epoch_end(self, outputs: List[Any]):
+    def on_test_epoch_end(self):
         pass
 
     def configure_optimizers(self):
