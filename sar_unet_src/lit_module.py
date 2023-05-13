@@ -17,7 +17,7 @@ class plUNET(pl.LightningModule):
             lr: float = 0.001,
             weight_decay: float = 0.0005,
             num_channels: int = 1,
-            loss='dice'
+            loss='ce'
     ):
         super().__init__()
         self.save_hyperparameters(logger=False)

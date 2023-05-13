@@ -28,13 +28,14 @@ def add_BeforeAfterCubeDataModule_args(parent_parser):
     parser.add_argument("--ds_path", type=str, default='data/hokkaido_japan.zarr')
     parser.add_argument("--ba_vars", type=str, default='vv,vh')
     parser.add_argument("--timestep_length", type=int, default=4)
-    # parser.add_argument("--event_start_date", type=str, default='20180905')
-    # parser.add_argument("--event_end_date", type=str, default='20180907')
+    parser.add_argument("--event_start_date", type=str, default='20180905')
+    parser.add_argument("--event_end_date", type=str, default='20180907')
     parser.add_argument("--input_vars", type=str, default='vv_before,vv_after,vh_before,vh_after')
     # parser.add_argument("--target", type=str, default='landslides')
     # parser.add_argument("--train_val_test_split", type=str, default='0.7_0.2_0.1')
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--num_workers", type=int, default=0)
+    parser.add_argument("--save_path", type=str, default=None)
     # parser.add_argument("--include_negatives", type=bool, default=False)
     return parent_parser
 
@@ -51,7 +52,7 @@ if __name__ == '__main__':
     hparams = parser.parse_args()
 
     # transform ba_vars to list
-    # hparams.ba_vars = hparams.ba_vars.split(',')
+    hparams.ba_vars = hparams.ba_vars.split(',')
     # transform input_vars to list
     hparams.input_vars = hparams.input_vars.split(',')
     # transform train_val_test_split to tuple
@@ -64,11 +65,11 @@ if __name__ == '__main__':
     # create the datamodule from the appropriate parsed arguments
     dm = BeforeAfterCubeDataModule(
         ds_path=hparams.ds_path,
-        ba_vars=['vv', 'vh'],
+        ba_vars=hparams.ba_vars,
         aggregation='mean',
         timestep_length=hparams.timestep_length,
-        event_start_date='20180905',
-        event_end_date='20180907',
+        event_start_date=hparams.event_start_date,
+        event_end_date=hparams.event_end_date,
         input_vars=hparams.input_vars,
         target='landslides',
         train_val_test_split=(0.7, 0.2, 0.1),
@@ -92,3 +93,5 @@ if __name__ == '__main__':
     trainer.fit(model, datamodule=dm)
     trainer.validate(datamodule=dm)
     trainer.test(datamodule=dm)
+    if hparams.save_path is not None:
+        torch.save(model.state_dict(), hparams.save_path)
