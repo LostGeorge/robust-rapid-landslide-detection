@@ -4,8 +4,8 @@ by Boehm et. al 2022, NIPS workshop on Tackling Climate Change with Machine Lear
 https://github.com/iprapas/landslide-sar-unet
 '''
 
-from sar_unet_src.lit_module import plUNET, plMLP
-from sar_unet_src.datamodule import BeforeAfterCubeDataModule
+from src.lit_module import plUNET, plMLP
+from src.base_data_module import BeforeAfterCubeDataModule
 import pytorch_lightning as pl
 import torch
 import argparse
@@ -22,12 +22,12 @@ def add_plUNET_args(parent_parser):
     parser.add_argument("--loss", type=str, default='ce')
     return parent_parser
 
-# a function to read plUNET parameters as program arguments
+# a function to read plMLP parameters as program arguments
 def add_plMLP_args(parent_parser):
-    parser = parent_parser.add_argument_group("plUNET")
+    parser = parent_parser.add_argument_group("plMLP")
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
-    parser.add_argument("--loss", type=str, default='nse')
+    parser.add_argument("--loss", type=str, default='mse')
     return parent_parser
 
 

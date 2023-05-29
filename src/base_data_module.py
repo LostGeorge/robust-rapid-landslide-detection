@@ -74,7 +74,7 @@ def batching_dataset(ds, input_vars, target, include_negatives):
             positives = positives + positives_tmp
             negatives += batch[target].size
             batches.append(batch)
-    print(f"P/(P+N)", positives / negatives)
+    print(f"P/N", positives / negatives)
     return batches, mean_std_dict
 
 
