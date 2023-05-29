@@ -21,7 +21,7 @@ def before_after_ds(ds_path, ba_vars, aggregation, timestep_length, event_start_
     ds = xr.open_zarr(ds_path)
     for var in ba_vars:
         ds[var] = np.log(ds[var])
-    orbit_state_bool_arr = (ds['sat:orbit_state'] == 'd').compute()
+    orbit_state_bool_arr = (ds['sat_orbit_state'] == 'd').compute()
     ds = ds.where(orbit_state_bool_arr, drop=True)
     before_ds = ds.drop_dims('timepair').sel(timestep=slice(None, event_start_date))
     after_ds = ds.drop_dims('timepair').sel(timestep=slice(event_end_date, None))
