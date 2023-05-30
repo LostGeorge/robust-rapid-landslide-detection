@@ -18,6 +18,7 @@ from utils import seed_everything
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--ds_path", type=str, default='data/hokkaido_japan.zarr')
+parser.add_argument("--sat_orbit_state", type=str, default='d')
 parser.add_argument("--ba_vars", type=str, nargs='*', default=['vv', 'vh'])
 parser.add_argument("--timestep_length", type=int, default=4)
 parser.add_argument("--event_start_date", type=str, default='20180905')
@@ -53,4 +54,4 @@ out_yaml = {
     'val': sorted(val_split.indices),
     'test': sorted(test_split.indices),
 }
-yaml.safe_dump(out_yaml, args.out_file)
+yaml.safe_dump(out_yaml, open(args.out_file, 'w'), default_flow_style=None)

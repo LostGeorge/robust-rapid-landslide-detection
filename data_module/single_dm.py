@@ -41,7 +41,7 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
             input_vars,
             target,
             include_negatives=False,
-            train_val_test_split: Tuple[float, float, float] = (0.7, 0.2, 0.1),
+            split_fp: str = 'data/hokkaido_70_20_10.yaml',
             batch_size: int = 64,
             num_workers: int = 0,
             pin_memory: bool = False,
