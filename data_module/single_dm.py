@@ -1,9 +1,10 @@
 from typing import Optional, Tuple
 from collections import defaultdict
+import yaml
 
 import torch
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split
+from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, Subset
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
 import numpy as np
@@ -60,7 +61,10 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
         self.data_test: Optional[Dataset] = None
 
     def prepare_data(self):
-        pass
+        splits = yaml.safe_load(open(self.hparams.split_fp))
+        self.train_idx = splits['train']
+        self.val_idx = splits['val']
+        self.test_idx = splits['test']
 
     def setup(self, stage: Optional[str] = None):
         """Load data. Set variables: `self.data_train`, `self.data_val`, `self.data_test`.
@@ -80,20 +84,12 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
             dataset = BeforeAfterDatasetBatches(self.batches, self.hparams.input_vars, self.hparams.target,
                                                         mean_std_dict=self.mean_std_dict)
 
-            train_val_test_split = [int(len(dataset) * x) for x in self.hparams.train_val_test_split]
-            train_val_test_split[2] = len(dataset) - train_val_test_split[1] - train_val_test_split[0]
-            train_val_test_split = tuple(train_val_test_split)
-            print("*" * 20)
-            print("Train - Val - Test SPLIT", train_val_test_split)
-            print("*" * 20)
-            self.data_train, self.data_val, self.data_test = random_split(
-                dataset=dataset,
-                lengths=train_val_test_split,
-            )
-
-            print("*" * 20)
-            print("Train - Val - Test LENGTHS", len(self.data_train), len(self.data_val), len(self.data_test))
-            print("*" * 20)
+            splits_length = len(self.train_idx) + len(self.val_idx) +  len(self.test_idx)
+            assert len(dataset) == splits_length, \
+                f"Loaded data has {len(dataset)} items, but splits contain {splits_length} indices total."
+            self.data_train = Subset(dataset, indices=self.train_idx)
+            self.data_val = Subset(dataset, self.val_idx)
+            self.data_test = Subset(dataset, self.test_idx)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(
