@@ -23,8 +23,25 @@ def before_after_ds(
     ds = xr.open_zarr(ds_path)
     for var in ba_vars:
         ds[var] = np.log(ds[var])
-    orbit_state_bool_arr = (ds['sat_orbit_state'] == sat_orbit_state).compute()
-    ds = ds.where(orbit_state_bool_arr, drop=True)
+    
+    if 'hokkaido' in ds_path:
+        orbit_state_bool_arr = xr.DataArray(
+            data=['d', 'd', 'a', 'd', 'd', 'd', 'a', 'd', 'd', 'a', 'd', 'd', 'a', 'd', 'd', 'a', 'd', 'd', 'a', 'd', 'a', 'd', 'd', 'a', 'd', 'd'],
+            dims=['timestep']
+        )
+    elif 'talakmau' in ds_path:
+        orbit_state_bool_arr = xr.DataArray(
+            data=['a', 'd', 'a', 'd', 'a', 'd', 'a', 'd', 'a', 'd', 'a', 'd', 'a', 'd', 'a', 'a', 'a', 'a', 'a', 'a'],
+            dims=['timestep']
+        )
+    elif 'kaikoura' in ds_path:
+        orbit_state_bool_arr = xr.DataArray(
+            data=['ascending', 'ascending', 'ascending', 'ascending', 'ascending'],
+            dims=['timestep']
+        )
+    if 'puerto_rico' not in ds_path:
+        ds = ds.where(orbit_state_bool_arr, drop=True)
+    
     before_ds = ds.drop_dims('timepair').sel(timestep=slice(None, event_start_date))
     after_ds = ds.drop_dims('timepair').sel(timestep=slice(event_end_date, None))
 
@@ -51,6 +68,11 @@ def before_after_ds(
     for var in the_ds.data_vars:
         the_ds[f'{var}_mean'] = the_ds[var].mean()
         the_ds[f'{var}_std'] = the_ds[var].std()
+    map_vars = ['dem', 'dem_aspect', 'dem_curvature', 'dem_slope_radians', 'dem_slope_riserun', 'extraction_mask',\
+                'landslides', 'vv_before', 'vv_after', 'vh_before', 'vh_after', 'old_landslides', 'reactivated_landslides']
+    for var in map_vars:
+        if var in the_ds.data_vars:
+            the_ds[var] = the_ds[var].astype(np.float16) # need to do this or else kaikoura is too large to fit in memory
     return the_ds.load()
 
 
@@ -94,7 +116,7 @@ class BeforeAfterDatasetBatches(Dataset):
 
     def __getitem__(self, idx):
         batch = self.batches[idx]
-        inputs = np.stack([batch[var].values for var in self.input_vars])
+        inputs = np.stack([batch[var].values for var in self.input_vars]).astype(np.float32)
         inputs = (inputs - self.mean) / self.std
 
         target = batch[self.target].values

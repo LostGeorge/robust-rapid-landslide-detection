@@ -36,6 +36,7 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
             ds_path: str,
             ba_vars,
             aggregation,
+            sat_orbit_state,
             timestep_length,
             event_start_date,
             event_end_date,
@@ -75,9 +76,8 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
         """
         # load datasets only if they're not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
-            self.ds = before_after_ds(self.hparams.ds_path, self.hparams.ba_vars, self.hparams.aggregation,
-                                      self.hparams.timestep_length, self.hparams.event_start_date,
-                                      self.hparams.event_end_date)
+            self.ds = before_after_ds(self.hparams.ds_path, self.hparams.sat_orbit_state, self.hparams.ba_vars, self.hparams.aggregation,
+                                      self.hparams.timestep_length, self.hparams.event_start_date, self.hparams.event_end_date)
             self.batches, self.mean_std_dict = batching_dataset(self.ds, self.hparams.input_vars, self.hparams.target,
                                                                 self.hparams.include_negatives)
 
@@ -126,6 +126,7 @@ if __name__ == '__main__': # to test
         ds_path='data/hokkaido_japan.zarr',
         ba_vars=['vv', 'vh'],
         aggregation='mean',
+        sat_orbit_state='d',
         timestep_length=2,
         event_start_date='20180905',
         event_end_date='20180907',
@@ -136,8 +137,12 @@ if __name__ == '__main__': # to test
         batch_size=64,
         num_workers=4
     )
-
-    print(dm.train_dataloader.next())
-    print(dm.val_dataloader.next())
-    print(dm.test_dataloader.next())
+    dm.prepare_data()
+    dm.setup()
+    train_data, train_label = next(iter(dm.train_dataloader()))
+    val_data, val_label = next(iter(dm.val_dataloader()))
+    test_data, test_label = next(iter(dm.test_dataloader()))
+    print(train_data.dtype, train_data.shape, train_label.dtype, train_label.shape)
+    print(val_data.dtype, val_data.shape, val_label.dtype, val_label.shape)
+    print(test_data.dtype, test_data.shape, test_label.dtype, test_label.shape)
 

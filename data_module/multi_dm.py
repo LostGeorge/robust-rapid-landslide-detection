@@ -42,6 +42,9 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
         self.dms: List[SingleBeforeAfterCubeDataModule] = []
         for dm_arg in dm_args:
             self.dms.append(SingleBeforeAfterCubeDataModule(**dm_arg))
+        self.data_train = False
+        self.data_val = False
+        self.data_test = False
 
     def prepare_data(self):
         for dm in self.dms:
@@ -58,7 +61,10 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
         if not self.data_train and not self.data_val and not self.data_test:
             for dm in self.dms:
                 dm.setup(stage=stage)
-            
+            self.data_train = True
+            self.data_val = True
+            self.data_test = True
+                
 
     def train_dataloader(self) -> DataLoader:
         loader_dict = {i: DataLoader(
@@ -120,4 +126,82 @@ class InfiniteMultiDataLoader(DataLoader):
                 batch = next(self.generators[i], None)
             batch_contents.append(batch)
         return batch_contents # [(x1, y1), (x2, y2), etc.]
+
+if __name__ == '__main__':
+    dm = MultiBeforeAfterCubeDataModule([
+        {
+            'ds_path': 'data/hokkaido_japan.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'd',
+            'timestep_length': 1,
+            'event_start_date': '20180905',
+            'event_end_date': '20180907',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/hokkaido_70_20_10.yaml',
+            'batch_size': 64,
+            'num_workers': 4
+        },
+        {
+            'ds_path': 'data/kaikoura_newzealand.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'ascending',
+            'timestep_length': 1,
+            'event_start_date': '20161114',
+            'event_end_date': '20161115',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/kaikoura_70_20_10.yaml',
+            'batch_size': 64,
+            'num_workers': 4
+        },
+        {
+            'ds_path': 'data/puerto_rico.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'dummy',
+            'timestep_length': 1,
+            'event_start_date': '20170920',
+            'event_end_date': '20170921',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/puerto_rico_70_20_10.yaml',
+            'batch_size': 64,
+            'num_workers': 4
+        }
+    ])
+    dm.prepare_data()
+    dm.setup()
+
+    train_dict = next(iter(dm.train_dataloader()))
+    train_data_1, train_label_1 = train_dict[0]
+    train_data_2, train_label_2 = train_dict[1]
+    train_data_3, train_label_3 = train_dict[2]
+
+    val_loaders = dm.val_dataloader()
+    val_data_1, val_label_1 = next(iter(val_loaders[0]))
+    val_data_2, val_label_2 = next(iter(val_loaders[1]))
+    val_data_3, val_label_3 = next(iter(val_loaders[2]))
+
+    test_loaders = dm.val_dataloader()
+    test_data_1, test_label_1 = next(iter(test_loaders[0]))
+    test_data_2, test_label_2 = next(iter(test_loaders[1]))
+    test_data_3, test_label_3 = next(iter(test_loaders[2]))
+
+    print(train_data_1.dtype, train_data_1.shape, train_label_1.dtype, train_label_1.shape)
+    print(train_data_2.dtype, train_data_2.shape, train_label_2.dtype, train_label_2.shape)
+    print(train_data_3.dtype, train_data_3.shape, train_label_3.dtype, train_label_3.shape)
+    print(val_data_1.dtype, val_data_1.shape, val_label_1.dtype, val_label_1.shape)
+    print(val_data_2.dtype, val_data_2.shape, val_label_2.dtype, val_label_2.shape)
+    print(val_data_3.dtype, val_data_3.shape, val_label_3.dtype, val_label_3.shape)
+    print(test_data_1.dtype, test_data_1.shape, test_label_1.dtype, test_label_1.shape)
+    print(test_data_2.dtype, test_data_2.shape, test_label_2.dtype, test_label_2.shape)
+    print(test_data_3.dtype, test_data_3.shape, test_label_3.dtype, test_label_3.shape)
+
+
 
