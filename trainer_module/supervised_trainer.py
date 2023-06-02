@@ -3,8 +3,10 @@ import torch
 from typing import Any, List, Union, Callable
 from torchmetrics import AUROC, AveragePrecision, F1Score
 
+from data_module.single_dm import SingleBeforeAfterCubeDataModule
+from trainer_module.helpers import BinarySegmentationMetricsWrapper
 
-class plSupervisedTrainer(pl.LightningModule):
+class plSupervisedTrainerModule(pl.LightningModule):
     def __init__(
             self,
             model: torch.nn.Module,
@@ -21,15 +23,7 @@ class plSupervisedTrainer(pl.LightningModule):
         else:
             raise NotImplementedError
 
-        self.train_auc = AUROC(task='binary', pos_label=1)
-        self.train_f1 = F1Score(task='binary')
-        self.train_auprc = AveragePrecision(task='binary', pos_label=1)
-        self.val_auc = AUROC(task='binary', pos_label=1)
-        self.val_f1 = F1Score(task='binary')
-        self.val_auprc = AveragePrecision(task='binary', pos_label=1)
-        self.test_auc = AUROC(task='binary', pos_label=1)
-        self.test_auprc = AveragePrecision(task='binary', pos_label=1)
-        self.test_f1 = F1Score(task='binary')
+        self.metrics = BinarySegmentationMetricsWrapper()
 
 
     def forward(self, x: torch.Tensor):
@@ -45,14 +39,14 @@ class plSupervisedTrainer(pl.LightningModule):
 
     def training_step(self, batch: Any, batch_idx: int):
         loss, preds, targets, inputs = self.step(batch)
-        self.train_auc.update(preds, targets)
-        self.train_auprc.update(preds.flatten(), targets.flatten())
-        self.train_f1.update(preds.flatten(), targets.flatten())
+        self.metrics.train_auc.update(preds, targets)
+        self.metrics.train_auprc.update(preds., targets.)
+        self.metrics.train_f1.update(preds., targets.)
 
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/auc", self.train_auc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("train/auprc", self.train_auprc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("train/f1", self.train_f1, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("train/auc", self.metrics.train_auc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("train/auprc", self.metrics.train_auprc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("train/f1", self.metrics.train_f1, on_step=False, on_epoch=True, prog_bar=False)
         return {"loss": loss, "preds": preds, "targets": targets, "inputs": inputs}
 
     def on_training_epoch_end(self):
@@ -62,26 +56,26 @@ class plSupervisedTrainer(pl.LightningModule):
         loss, preds, targets, _ = self.step(batch)
 
         # log val metrics
-        self.val_auc.update(preds, targets)
-        self.val_auprc.update(preds.flatten(), targets.flatten())
-        self.val_f1.update(preds.flatten(), targets.flatten())
+        self.metrics.val_auc.update(preds, targets)
+        self.metrics.val_auprc.update(preds., targets.)
+        self.metrics.val_f1.update(preds., targets.)
 
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/auc", self.val_auc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/auprc", self.val_auprc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val/f1", self.val_f1, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/auc", self.metrics.val_auc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/auprc", self.metrics.val_auprc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val/f1", self.metrics.val_f1, on_step=False, on_epoch=True, prog_bar=True)
         return {"loss": loss, "preds": preds, "targets": targets}
 
     def test_step(self, batch: Any, batch_idx: int):
         loss, preds, targets, _ = self.step(batch)
-        self.test_auc.update(preds, targets)
-        self.test_auprc.update(preds.flatten(), targets.flatten())
-        self.test_f1.update(preds.flatten(), targets.flatten())
+        self.metrics.test_auc.update(preds, targets)
+        self.metrics.test_auprc.update(preds., targets.)
+        self.metrics.test_f1.update(preds., targets.)
 
         self.log("test/loss", loss, on_step=False, on_epoch=True)
-        self.log("test/auc", self.test_auc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("test/auprc", self.test_auprc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log("test/f1", self.test_f1, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("test/auc", self.metrics.test_auc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("test/auprc", self.metrics.test_auprc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log("test/f1", self.metrics.test_f1, on_step=False, on_epoch=True, prog_bar=False)
         return {"loss": loss, "preds": preds, "targets": targets}
 
     def on_test_epoch_end(self):
@@ -93,3 +87,29 @@ class plSupervisedTrainer(pl.LightningModule):
         )
         lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
         return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler, "monitor": "train/loss"}
+    
+
+if __name__ == '__main__':
+    import segmentation_models_pytorch as smp
+    model = smp.UnetPlusPlus(encoder_name='resnet50', in_channels=4, classes=2)
+    dm = SingleBeforeAfterCubeDataModule(
+        ds_path='data/hokkaido_japan.zarr',
+        ba_vars=['vv', 'vh'],
+        aggregation='mean',
+        sat_orbit_state='d',
+        timestep_length=2,
+        event_start_date='20180905',
+        event_end_date='20180907',
+        input_vars=['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+        target='landslides',
+        include_negatives=False,
+        split_fp='data/hokkaido_70_20_10.yaml',
+        batch_size=64,
+        num_workers=4
+    )
+    trainer_module = plSupervisedTrainerModule(model=model)
+    trainer = pl.Trainer(max_epochs=2)
+    trainer.fit(trainer_module, datamodule=dm)
+    trainer.validate(datamodule=dm, ckpt_path='best')
+    trainer.test(datamodule=dm, ckpt_path='best')
+    
