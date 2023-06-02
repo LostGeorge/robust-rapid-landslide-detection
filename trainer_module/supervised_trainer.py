@@ -1,4 +1,4 @@
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 import torch
 from typing import Any, List, Union, Callable
 from torchmetrics import AUROC, AveragePrecision, F1Score

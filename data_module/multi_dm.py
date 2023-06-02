@@ -4,8 +4,8 @@ from torch.utils.data.dataloader import _BaseDataLoaderIter, _collate_fn_t, _wor
 import yaml
 
 import torch
-from lightning.pytorch import LightningDataModule
-from lightning.pytorch.utilities.combined_loader import CombinedLoader
+from pytorch_lightning import LightningDataModule
+from pytorch_lightning.utilities.combined_loader import CombinedLoader
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler, random_split, Subset
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms

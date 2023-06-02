@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import lightning.pytorch as pl
+import pytorch_lightning as pl
 import segmentation_models_pytorch as smp
 
 import argparse
