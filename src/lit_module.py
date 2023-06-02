@@ -5,7 +5,7 @@ https://github.com/iprapas/landslide-sar-unet
 '''
 
 import segmentation_models_pytorch as smp
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torch
 from typing import Any, List
 from torchmetrics import AUROC, AveragePrecision, F1Score

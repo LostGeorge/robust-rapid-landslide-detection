@@ -3,7 +3,7 @@ from collections import defaultdict
 import yaml
 
 import torch
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, Subset
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
@@ -120,3 +120,24 @@ class SingleBeforeAfterCubeDataModule(LightningDataModule):
             shuffle=False,
             persistent_workers=(self.hparams.num_workers > 0)
         )
+    
+if __name__ == '__main__': # to test
+    dm = SingleBeforeAfterCubeDataModule(
+        ds_path='data/hokkaido_japan.zarr',
+        ba_vars=['vv', 'vh'],
+        aggregation='mean',
+        timestep_length=2,
+        event_start_date='20180905',
+        event_end_date='20180907',
+        input_vars=['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+        target='landslides',
+        include_negatives=False,
+        split_fp='data/hokkaido_70_20_10.yaml',
+        batch_size=64,
+        num_workers=4
+    )
+
+    print(dm.train_dataloader.next())
+    print(dm.val_dataloader.next())
+    print(dm.test_dataloader.next())
+

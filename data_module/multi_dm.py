@@ -4,7 +4,8 @@ from torch.utils.data.dataloader import _BaseDataLoaderIter, _collate_fn_t, _wor
 import yaml
 
 import torch
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
+from lightning.pytorch.utilities.combined_loader import CombinedLoader
 from torch.utils.data import ConcatDataset, DataLoader, Dataset, Sampler, random_split, Subset
 from torchvision.datasets import MNIST
 from torchvision.transforms import transforms
@@ -60,15 +61,17 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
             
 
     def train_dataloader(self) -> DataLoader:
-        loaders = [DataLoader(
+        loader_dict = {i: DataLoader(
             dataset=dm.data_train,
             batch_size=dm.hparams.batch_size,
             num_workers=dm.hparams.num_workers,
             pin_memory=dm.hparams.pin_memory,
             shuffle=True,
             persistent_workers=(dm.hparams.num_workers > 0)
-        ) for dm in self.dms]
-        return InfiniteMultiDataLoader(loaders)
+        ) for i, dm in enumerate(self.dms)}
+        # return InfiniteMultiDataLoader(loaders)
+        combined_loader = CombinedLoader(loader_dict, mode='max_size_cycle')
+        return combined_loader
 
     def val_dataloader(self) -> List[DataLoader]:
         loaders = [DataLoader(

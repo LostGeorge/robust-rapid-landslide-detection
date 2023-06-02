@@ -6,7 +6,7 @@ https://github.com/iprapas/landslide-sar-unet
 
 from src.lit_module import plUNET, plMLP
 from src.base_data_module import BeforeAfterCubeDataModule
-import pytorch_lightning as pl
+import lightning.pytorch as pl
 import torch
 import argparse
 import sys
