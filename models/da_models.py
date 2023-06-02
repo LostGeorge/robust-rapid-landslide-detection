@@ -21,7 +21,7 @@ def instantiate_da_models(model=smp.UnetPlusPlus, encoder_name='resnet50', share
         assert len(state_dict_paths) == num_heads, f"len of state_dict_paths {len(state_dict_paths)} should match num_heads {num_heads}"
 
     encoder = None
-    heads = []
+    models = []
     for i in range(num_heads):
         net = model(encoder_name=encoder_name, in_channels=num_channels, classes=classes, **kwargs)
         if state_dict_paths is not None:
@@ -30,5 +30,5 @@ def instantiate_da_models(model=smp.UnetPlusPlus, encoder_name='resnet50', share
             encoder = net.encoder
         elif share_encoders:
             net.encoder = encoder
-        heads.append(net)
-    return encoder, heads
+        models.append(net)
+    return encoder, models
