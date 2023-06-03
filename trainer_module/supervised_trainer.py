@@ -40,8 +40,8 @@ class plSupervisedTrainerModule(pl.LightningModule):
     def training_step(self, batch: Any, batch_idx: int):
         loss, preds, targets, inputs = self.step(batch)
         self.metrics.train_auc.update(preds, targets)
-        self.metrics.train_auprc.update(preds., targets.)
-        self.metrics.train_f1.update(preds., targets.)
+        self.metrics.train_auprc.update(preds, targets)
+        self.metrics.train_f1.update(preds, targets)
 
         self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train/auc", self.metrics.train_auc, on_step=False, on_epoch=True, prog_bar=False)
@@ -57,8 +57,8 @@ class plSupervisedTrainerModule(pl.LightningModule):
 
         # log val metrics
         self.metrics.val_auc.update(preds, targets)
-        self.metrics.val_auprc.update(preds., targets.)
-        self.metrics.val_f1.update(preds., targets.)
+        self.metrics.val_auprc.update(preds, targets)
+        self.metrics.val_f1.update(preds, targets)
 
         self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val/auc", self.metrics.val_auc, on_step=False, on_epoch=True, prog_bar=True)
@@ -69,8 +69,8 @@ class plSupervisedTrainerModule(pl.LightningModule):
     def test_step(self, batch: Any, batch_idx: int):
         loss, preds, targets, _ = self.step(batch)
         self.metrics.test_auc.update(preds, targets)
-        self.metrics.test_auprc.update(preds., targets.)
-        self.metrics.test_f1.update(preds., targets.)
+        self.metrics.test_auprc.update(preds, targets)
+        self.metrics.test_f1.update(preds, targets)
 
         self.log("test/loss", loss, on_step=False, on_epoch=True)
         self.log("test/auc", self.metrics.test_auc, on_step=False, on_epoch=True, prog_bar=False)

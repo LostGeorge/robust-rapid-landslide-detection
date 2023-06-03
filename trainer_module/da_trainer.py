@@ -13,9 +13,9 @@ class plDATrainerModule(pl.LightningModule):
             discriminator: torch.nn.Module,
             model_losses: List[Union[str, Callable]],
             lr: float,
-            model_lambdas: List[float],
-            disc_lambda: float,
-            da_lambda: float
+            model_lambdas: List[float] = [1, 1, 1],
+            disc_lambda: float = 1,
+            da_lambda: float = 1,
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -59,7 +59,18 @@ class plDATrainerModule(pl.LightningModule):
         disc_loss = self.disc_loss(disc_out, disc_labels.to(self.device)) * self.hparams.disc_lambda
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
-        # TODO: log train losses and metrics
+        self.log("train/seg_loss_total", seg_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/disc_loss", disc_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/da_loss", da_loss, on_step=False, on_epoch=True, prog_bar=True)
+        for i, metrics_obj in enumerate(self.metrics):
+            metrics_obj.train_auc.update(seg_out[i], batch_dict[i][1])
+            metrics_obj.train_auprc.update(seg_out[i], batch_dict[i][1])
+            metrics_obj.train_f1.update(seg_out[i], batch_dict[i][1])
+
+            self.log(f"train/{i}/seg_loss", seg_losses[i], on_step=False, on_epoch=True, prog_bar=True)
+            self.log(f"train/{i}/auc", metrics_obj.train_auc, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(f"train/{i}/auprc", metrics_obj.train_auprc, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(f"train/{i}/f1", metrics_obj.train_f1, on_step=False, on_epoch=True, prog_bar=True)
 
         seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
         seg_optimizer.zero_grad()
@@ -117,3 +128,75 @@ class plDATrainerModule(pl.LightningModule):
         da_optimizer = torch.optim.Adam(params=self.encoder.parameters(), lr=self.hparams.lr)
         # TODO: maybe add schedulers (not sure if good idea)
         return seg_optimizer, disc_optimizer, da_optimizer
+
+
+if __name__ == '__main__':
+    import segmentation_models_pytorch as smp
+    from models.da_models import instantiate_da_models
+    from models.discriminator import MLPDiscriminator
+    from data_module.multi_dm import MultiBeforeAfterCubeDataModule
+
+    dm = MultiBeforeAfterCubeDataModule([
+        {
+            'ds_path': 'data/hokkaido_japan.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'd',
+            'timestep_length': 1,
+            'event_start_date': '20180905',
+            'event_end_date': '20180907',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/hokkaido_70_20_10.yaml',
+            'batch_size': 32,
+            'num_workers': 4
+        },
+        {
+            'ds_path': 'data/kaikoura_newzealand.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'ascending',
+            'timestep_length': 1,
+            'event_start_date': '20161114',
+            'event_end_date': '20161115',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/kaikoura_70_20_10.yaml',
+            'batch_size': 32,
+            'num_workers': 4
+        },
+        {
+            'ds_path': 'data/puerto_rico.zarr',
+            'ba_vars': ['vv', 'vh'],
+            'aggregation': 'mean',
+            'sat_orbit_state': 'dummy',
+            'timestep_length': 1,
+            'event_start_date': '20170920',
+            'event_end_date': '20170921',
+            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
+            'target': 'landslides',
+            'include_negatives': False,
+            'split_fp': 'data/puerto_rico_70_20_10.yaml',
+            'batch_size': 32,
+            'num_workers': 4
+        }
+    ])
+
+    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_channels=4, classes=2)
+    discriminator = MLPDiscriminator(512, [512], 3)
+
+    da_trainer_module = plDATrainerModule(
+        encoder,
+        models,
+        discriminator,
+        model_losses=['ce', 'ce', 'ce'],
+        lr=1e-3,
+    )
+
+    trainer = pl.Trainer(max_epochs=5)
+    trainer.fit(da_trainer_module, datamodule=dm)
+    trainer.validate(datamodule=dm, ckpt_path='best')
+    trainer.test(datamodule=dm, ckpt_path='best')
+
