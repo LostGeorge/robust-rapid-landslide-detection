@@ -75,10 +75,10 @@ class plDATrainerModule(pl.LightningModule):
 
         seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
         seg_optimizer.zero_grad()
-        self.manual_backward(seg_loss)
+        self.manual_backward(seg_loss, retain_graph=True)
         seg_optimizer.step()
         disc_optimizer.zero_grad()
-        self.manual_backward(disc_loss)
+        self.manual_backward(disc_loss, retain_graph=True)
         disc_optimizer.step()
         da_optimizer.zero_grad()
         self.manual_backward(da_loss)

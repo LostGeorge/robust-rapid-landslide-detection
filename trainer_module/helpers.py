@@ -8,7 +8,7 @@ def domain_confusion_loss(disc_logits):
     '''
     disc_logits: (N, D) tensor where D is the number of domains
     '''
-    return -torch.mean(torch.sum(F.log_softmax(disc_logits), dim=1) / disc_logits.shape[1])
+    return -torch.mean(torch.sum(F.log_softmax(disc_logits, dim=1), dim=1) / disc_logits.shape[1])
 
 class BinarySegmentationMetricsWrapper(pl.LightningModule):
     
