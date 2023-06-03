@@ -15,6 +15,8 @@ class MLPDiscriminator(nn.Module):
         super().__init__()
         assert len(hidden_dims) >= 1
         layers = [
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
             nn.Linear(encoder_dim, hidden_dims[0]),
             act_fn()
         ]

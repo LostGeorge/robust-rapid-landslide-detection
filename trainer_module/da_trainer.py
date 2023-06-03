@@ -16,6 +16,7 @@ class plDATrainerModule(pl.LightningModule):
             model_lambdas: List[float] = [1, 1, 1],
             disc_lambda: float = 1,
             da_lambda: float = 1,
+            device: Optional[torch.device] = None,
     ):
         super().__init__()
         self.automatic_optimization = False
@@ -23,7 +24,6 @@ class plDATrainerModule(pl.LightningModule):
         self.encoder = encoder
         self.models = models
         self.discriminator = discriminator
-        self.device = self.encoder.device # maybe don't need this
 
         self.model_losses = []
         for loss in model_losses:
@@ -35,15 +35,17 @@ class plDATrainerModule(pl.LightningModule):
         self.disc_loss = torch.nn.CrossEntropyLoss()
         self.da_loss = domain_confusion_loss
         
-        self.metrics = []
+        metrics = []
         for _ in range(len(models)):
-            self.metrics.append(BinarySegmentationMetricsWrapper())
+            metrics.append(BinarySegmentationMetricsWrapper(device))
+        self.metrics = torch.nn.ModuleList(metrics)
+
 
     def forward(self, inputs: List[torch.Tensor]):
         enc_out_stages = [self.encoder(x) for x in inputs] # List[List[tensor]]
         disc_out = self.discriminator(torch.cat([stages[-1] for stages in enc_out_stages], dim=0))
         dec_out = [self.models[i].decoder(stages) for i, stages in enumerate(enc_out_stages)]
-        seg_out = [self.models[i].segmentation_head(out) for i, out in dec_out]
+        seg_out = [self.models[i].segmentation_head(out)[:, 0, ...] for i, out in enumerate(dec_out)]
         return seg_out, disc_out
 
     def training_step(self, batch_dict: Dict[int, Tuple], batch_idx: int):
@@ -52,11 +54,11 @@ class plDATrainerModule(pl.LightningModule):
         '''
         seg_out, disc_out = self([batch_dict[i][0] for i in range(len(batch_dict))])
         
-        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1]) for i, loss_fn in self.model_losses]
+        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1]) for i, loss_fn in enumerate(self.model_losses)]
         seg_loss = torch.sum(torch.stack(
             [seg_losses[i] * self.hparams.model_lambdas[i] for i in range(len(seg_losses))]))
         disc_labels = torch.cat([torch.ones(len(batch_dict[i][0]) * i) for i in range(len(batch_dict))])
-        disc_loss = self.disc_loss(disc_out, disc_labels.to(self.device)) * self.hparams.disc_lambda
+        disc_loss = self.disc_loss(disc_out, disc_labels) * self.hparams.disc_lambda
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
         self.log("train/seg_loss_total", seg_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -90,7 +92,7 @@ class plDATrainerModule(pl.LightningModule):
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
         x, targets = batch
-        preds = self.models[dataloader_idx](x)
+        preds = self.models[dataloader_idx](x)[:, 0, ...]
 
         self.metrics[dataloader_idx].val_auc.update(preds, targets)
         self.metrics[dataloader_idx].val_auprc.update(preds, targets)
@@ -103,7 +105,7 @@ class plDATrainerModule(pl.LightningModule):
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
         x, targets = batch
-        preds = self.models[dataloader_idx](x)
+        preds = self.models[dataloader_idx](x)[:, 0, ...]
 
         self.metrics[dataloader_idx].test_auc.update(preds, targets)
         self.metrics[dataloader_idx].test_auprc.update(preds.flatten(), targets.flatten())
@@ -149,8 +151,8 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/hokkaido_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
+            'batch_size': 8,
+            'num_workers': 2
         },
         {
             'ds_path': 'data/kaikoura_newzealand.zarr',
@@ -164,8 +166,8 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/kaikoura_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
+            'batch_size': 8,
+            'num_workers': 2
         },
         {
             'ds_path': 'data/puerto_rico.zarr',
@@ -179,13 +181,18 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/puerto_rico_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
+            'batch_size': 8,
+            'num_workers': 2
         }
     ])
 
-    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_channels=4, classes=2)
-    discriminator = MLPDiscriminator(512, [512], 3)
+    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_channels=4, classes=1)
+    if torch.cuda.is_available():
+        device = torch.device('cuda:0')
+    else:
+        device = torch.device('cpu')
+    discriminator = MLPDiscriminator(512, [512], 3).to(device)
+    models = [model.to(device) for model in models]
 
     da_trainer_module = plDATrainerModule(
         encoder,
@@ -193,6 +200,7 @@ if __name__ == '__main__':
         discriminator,
         model_losses=['ce', 'ce', 'ce'],
         lr=1e-3,
+        device=device,
     )
 
     trainer = pl.Trainer(max_epochs=5)

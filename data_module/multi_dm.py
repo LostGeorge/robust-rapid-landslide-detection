@@ -85,7 +85,7 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
             batch_size=dm.hparams.batch_size,
             num_workers=dm.hparams.num_workers,
             pin_memory=dm.hparams.pin_memory,
-            shuffle=True,
+            shuffle=False,
             persistent_workers=(dm.hparams.num_workers > 0)
         ) for dm in self.dms]
         return loaders
@@ -96,7 +96,7 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
             batch_size=dm.hparams.batch_size,
             num_workers=dm.hparams.num_workers,
             pin_memory=dm.hparams.pin_memory,
-            shuffle=True,
+            shuffle=False,
             persistent_workers=(dm.hparams.num_workers > 0)
         ) for dm in self.dms]
         return loaders
@@ -141,7 +141,7 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/hokkaido_70_20_10.yaml',
-            'batch_size': 64,
+            'batch_size': 32,
             'num_workers': 4
         },
         {
@@ -156,7 +156,7 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/kaikoura_70_20_10.yaml',
-            'batch_size': 64,
+            'batch_size': 32,
             'num_workers': 4
         },
         {
@@ -171,7 +171,7 @@ if __name__ == '__main__':
             'target': 'landslides',
             'include_negatives': False,
             'split_fp': 'data/puerto_rico_70_20_10.yaml',
-            'batch_size': 64,
+            'batch_size': 32,
             'num_workers': 4
         }
     ])
