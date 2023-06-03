@@ -53,12 +53,11 @@ class plDATrainerModule(pl.LightningModule):
         Note: We assume batch_dict is idx -> input, label in the input order
         '''
         seg_out, disc_out = self([batch_dict[i][0] for i in range(len(batch_dict))])
-        
         seg_losses = [loss_fn(seg_out[i], batch_dict[i][1].float()) for i, loss_fn in enumerate(self.model_losses)]
         seg_loss = torch.sum(torch.stack(
             [seg_losses[i] * self.hparams.model_lambdas[i] for i in range(len(seg_losses))]))
-        disc_labels = torch.cat([torch.ones(len(batch_dict[i][0]) * i) for i in range(len(batch_dict))]).to(self.hparams.device)
-        disc_loss = self.disc_loss(disc_out, disc_labels) * self.hparams.disc_lambda
+        disc_labels = torch.cat([torch.ones(len(batch_dict[i][0])) * i for i in range(len(batch_dict))]).to(self.hparams.device)
+        disc_loss = self.disc_loss(disc_out, disc_labels.long()) * self.hparams.disc_lambda
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
         self.log("train/seg_loss_total", seg_loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -111,9 +110,9 @@ class plDATrainerModule(pl.LightningModule):
         self.metrics[dataloader_idx].test_auprc.update(preds, targets.long())
         self.metrics[dataloader_idx].test_f1.update(preds, targets.long())
 
-        self.log(f"test/{dataloader_idx}/auc", self.test_auc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log(f"test/{dataloader_idx}/auprc", self.test_auprc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log(f"test/{dataloader_idx}/f1", self.test_f1, on_step=False, on_epoch=True, prog_bar=False)
+        self.log(f"test/{dataloader_idx}/auc", self.metrics[dataloader_idx].test_auc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log(f"test/{dataloader_idx}/auprc", self.metrics[dataloader_idx].test_auprc, on_step=False, on_epoch=True, prog_bar=False)
+        self.log(f"test/{dataloader_idx}/f1", self.metrics[dataloader_idx].test_f1, on_step=False, on_epoch=True, prog_bar=False)
 
 
     def on_test_epoch_end(self):

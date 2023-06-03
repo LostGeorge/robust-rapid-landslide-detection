@@ -31,6 +31,7 @@ if __name__ == '__main__':
         discriminator,
         model_losses=['ce', 'ce', 'ce'],
         lr=1e-3,
+        device=device,
     )
 
     trainer = pl.Trainer(max_epochs=5)

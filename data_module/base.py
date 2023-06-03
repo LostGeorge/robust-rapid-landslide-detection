@@ -42,8 +42,10 @@ def before_after_ds(
     if 'puerto_rico' not in ds_path:
         ds = ds.where(orbit_state_bool_arr == sat_orbit_state, drop=True)
     
-    before_ds = ds.drop_dims('timepair').sel(timestep=slice(None, event_start_date))
-    after_ds = ds.drop_dims('timepair').sel(timestep=slice(event_end_date, None))
+    ds = ds.drop_dims('timepair')
+    ds = ds[['vv', 'vh', 'landslides']]
+    before_ds = ds.sel(timestep=slice(None, event_start_date))
+    after_ds = ds.sel(timestep=slice(event_end_date, None))
 
     if timestep_length < len(before_ds['timestep']):
         before_ds = before_ds.isel(timestep=range(-1 - timestep_length, -1))
