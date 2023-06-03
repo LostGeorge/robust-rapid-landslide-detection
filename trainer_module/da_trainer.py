@@ -44,7 +44,7 @@ class plDATrainerModule(pl.LightningModule):
     def forward(self, inputs: List[torch.Tensor]):
         enc_out_stages = [self.encoder(x) for x in inputs] # List[List[tensor]]
         disc_out = self.discriminator(torch.cat([stages[-1] for stages in enc_out_stages], dim=0))
-        dec_out = [self.models[i].decoder(stages) for i, stages in enumerate(enc_out_stages)]
+        dec_out = [self.models[i].decoder(*stages) for i, stages in enumerate(enc_out_stages)]
         seg_out = [self.models[i].segmentation_head(out)[:, 0, ...] for i, out in enumerate(dec_out)]
         return seg_out, disc_out
 
@@ -57,7 +57,7 @@ class plDATrainerModule(pl.LightningModule):
         seg_losses = [loss_fn(seg_out[i], batch_dict[i][1].float()) for i, loss_fn in enumerate(self.model_losses)]
         seg_loss = torch.sum(torch.stack(
             [seg_losses[i] * self.hparams.model_lambdas[i] for i in range(len(seg_losses))]))
-        disc_labels = torch.cat([torch.ones(len(batch_dict[i][0]) * i) for i in range(len(batch_dict))])
+        disc_labels = torch.cat([torch.ones(len(batch_dict[i][0]) * i) for i in range(len(batch_dict))]).to(self.hparams.device)
         disc_loss = self.disc_loss(disc_out, disc_labels) * self.hparams.disc_lambda
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
