@@ -54,7 +54,7 @@ class plDATrainerModule(pl.LightningModule):
         '''
         seg_out, disc_out = self([batch_dict[i][0] for i in range(len(batch_dict))])
         
-        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1]) for i, loss_fn in enumerate(self.model_losses)]
+        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1].float()) for i, loss_fn in enumerate(self.model_losses)]
         seg_loss = torch.sum(torch.stack(
             [seg_losses[i] * self.hparams.model_lambdas[i] for i in range(len(seg_losses))]))
         disc_labels = torch.cat([torch.ones(len(batch_dict[i][0]) * i) for i in range(len(batch_dict))])
@@ -94,9 +94,9 @@ class plDATrainerModule(pl.LightningModule):
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        self.metrics[dataloader_idx].val_auc.update(preds, targets)
-        self.metrics[dataloader_idx].val_auprc.update(preds, targets)
-        self.metrics[dataloader_idx].val_f1.update(preds, targets)
+        self.metrics[dataloader_idx].val_auc.update(preds, targets.long())
+        self.metrics[dataloader_idx].val_auprc.update(preds, targets.long())
+        self.metrics[dataloader_idx].val_f1.update(preds, targets.long())
 
         self.log(f"val/{dataloader_idx}/auc", self.metrics[dataloader_idx].val_auc, on_step=False, on_epoch=True, prog_bar=True)
         self.log(f"val/{dataloader_idx}/auprc", self.metrics[dataloader_idx].val_auprc, on_step=False, on_epoch=True, prog_bar=True)
@@ -107,9 +107,9 @@ class plDATrainerModule(pl.LightningModule):
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        self.metrics[dataloader_idx].test_auc.update(preds, targets)
-        self.metrics[dataloader_idx].test_auprc.update(preds.flatten(), targets.flatten())
-        self.metrics[dataloader_idx].test_f1.update(preds.flatten(), targets.flatten())
+        self.metrics[dataloader_idx].test_auc.update(preds, targets.long())
+        self.metrics[dataloader_idx].test_auprc.update(preds, targets.long())
+        self.metrics[dataloader_idx].test_f1.update(preds, targets.long())
 
         self.log(f"test/{dataloader_idx}/auc", self.test_auc, on_step=False, on_epoch=True, prog_bar=False)
         self.log(f"test/{dataloader_idx}/auprc", self.test_auprc, on_step=False, on_epoch=True, prog_bar=False)
