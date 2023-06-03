@@ -1,0 +1,13 @@
+ds_path: 'data/hokkaido_japan.zarr'
+ba_vars: ['vv', 'vh']
+aggregation: 'mean'
+sat_orbit_state: 'd'
+timestep_length: 1
+event_start_date: '20180905'
+event_end_date: '20180907'
+input_vars: ['vv_before', 'vv_after', 'vh_before', 'vh_after']
+target: 'landslides'
+include_negatives: False
+split_fp: 'data/hokkaido_70_20_10.yaml'
+batch_size: 32
+num_workers: 4

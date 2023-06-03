@@ -9,6 +9,7 @@ from data_module.single_dm import SingleBeforeAfterCubeDataModule
 
 if __name__ == '__main__':
     utils.seed_everything(0)
+    config = utils.parse_yaml('config/talakmau.yaml')
     
     state_dict_paths = [""]
     encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_heads=1, num_channels=4, classes=2)
@@ -23,23 +24,7 @@ if __name__ == '__main__':
         model=model
     )
 
-    dm = SingleBeforeAfterCubeDataModule(
-        **{
-            'ds_path': 'data/talakmau_indonesia.zarr',
-            'ba_vars': ['vv', 'vh'],
-            'aggregation': 'mean',
-            'sat_orbit_state': 'd',
-            'timestep_length': 1,
-            'event_start_date': '20220225',
-            'event_end_date': '20220226',
-            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
-            'target': 'landslides',
-            'include_negatives': False,
-            'split_fp': 'data/talakmau_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
-        }
-    )
+    dm = SingleBeforeAfterCubeDataModule(**config)
 
     trainer = pl.Trainer()
     trainer.test(val_module, datamodule=dm)

@@ -1,0 +1,13 @@
+ds_path: 'data/kaikoura_newzealand.zarr'
+ba_vars: ['vv', 'vh']
+aggregation: 'mean'
+sat_orbit_state: 'ascending'
+timestep_length: 1
+event_start_date: '20161114'
+event_end_date: '20161115'
+input_vars: ['vv_before', 'vv_after', 'vh_before', 'vh_after']
+target: 'landslides'
+include_negatives: False
+split_fp: 'data/kaikoura_70_20_10.yaml'
+batch_size: 32
+num_workers: 4

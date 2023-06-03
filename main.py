@@ -10,54 +10,12 @@ import utils
 
 if __name__ == '__main__':
     utils.seed_everything(0)
+    
+    # Load config files
+    config_paths = ['config/hokkaido.yaml', 'config/kaikoura.yaml', 'config/puerto_rico.yaml']
+    configs = [utils.parse_yaml(config_path) for config_path in config_paths]
 
-    dm = MultiBeforeAfterCubeDataModule([
-        {
-            'ds_path': 'data/hokkaido_japan.zarr',
-            'ba_vars': ['vv', 'vh'],
-            'aggregation': 'mean',
-            'sat_orbit_state': 'd',
-            'timestep_length': 1,
-            'event_start_date': '20180905',
-            'event_end_date': '20180907',
-            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
-            'target': 'landslides',
-            'include_negatives': False,
-            'split_fp': 'data/hokkaido_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
-        },
-        {
-            'ds_path': 'data/kaikoura_newzealand.zarr',
-            'ba_vars': ['vv', 'vh'],
-            'aggregation': 'mean',
-            'sat_orbit_state': 'ascending',
-            'timestep_length': 1,
-            'event_start_date': '20161114',
-            'event_end_date': '20161115',
-            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
-            'target': 'landslides',
-            'include_negatives': False,
-            'split_fp': 'data/kaikoura_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
-        },
-        {
-            'ds_path': 'data/puerto_rico.zarr',
-            'ba_vars': ['vv', 'vh'],
-            'aggregation': 'mean',
-            'sat_orbit_state': 'dummy',
-            'timestep_length': 1,
-            'event_start_date': '20170920',
-            'event_end_date': '20170921',
-            'input_vars': ['vv_before', 'vv_after', 'vh_before', 'vh_after'],
-            'target': 'landslides',
-            'include_negatives': False,
-            'split_fp': 'data/puerto_rico_70_20_10.yaml',
-            'batch_size': 32,
-            'num_workers': 4
-        }
-    ])
+    dm = MultiBeforeAfterCubeDataModule(configs)
 
     encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_channels=4, classes=2)
     if torch.cuda.is_available():

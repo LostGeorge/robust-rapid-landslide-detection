@@ -5,6 +5,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 import random
+import yaml
 
 """
 Convenience Functions
@@ -19,6 +20,10 @@ def seed_everything(seed):
         torch.backends.cudnn.deterministic = True
     pl.seed_everything(seed, workers=True)
 
+def parse_yaml(path) -> dict:
+    with open(path, 'r') as yml:
+        return yaml.safe_load(yml)
+    
 """
 Evaluation
 """
