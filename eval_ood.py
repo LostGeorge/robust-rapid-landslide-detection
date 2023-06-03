@@ -10,8 +10,8 @@ from data_module.single_dm import SingleBeforeAfterCubeDataModule
 if __name__ == '__main__':
     utils.seed_everything(0)
     
-    state_dict_paths = ["","",""]
-    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_channels=4, classes=2)
+    state_dict_paths = [""]
+    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_heads=1, num_channels=4, classes=2)
 
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
