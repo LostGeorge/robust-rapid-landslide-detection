@@ -24,6 +24,12 @@ def parse_yaml(path) -> dict:
     with open(path, 'r') as yml:
         return yaml.safe_load(yml)
     
+def get_encoder_output_channels(encoder_name):
+    if encoder_name == 'resnet18' or encoder_name == 'resnet34':
+        return 512
+    elif encoder_name == 'resnet50' or encoder_name == 'renet101' or encoder_name == 'resnet152':
+        return 2048
+    
 """
 Evaluation
 """

@@ -1,7 +1,8 @@
 import pytorch_lightning as pl
 import torch
+import numpy as np
 from typing import Any, List, Union, Callable, Optional, Dict, Tuple
-from torchmetrics import AUROC, AveragePrecision, F1Score
+from torchmetrics import AUROC, AveragePrecision, F1Score, Accuracy
 
 from trainer_module.helpers import BinarySegmentationMetricsWrapper, domain_confusion_loss
 
@@ -20,7 +21,7 @@ class plDATrainerModule(pl.LightningModule):
     ):
         super().__init__()
         self.automatic_optimization = False
-        self.save_hyperparameters(logger=False)
+        self.save_hyperparameters(logger=False, ignore=['encoder', 'models', 'discriminator'])
         self.encoder = encoder
         self.models = models
         self.discriminator = discriminator
@@ -39,6 +40,11 @@ class plDATrainerModule(pl.LightningModule):
         for _ in range(len(models)):
             metrics.append(BinarySegmentationMetricsWrapper(device))
         self.metrics = torch.nn.ModuleList(metrics)
+        self.disc_acc = Accuracy(task='multiclass', num_classes=len(models), average='micro')
+        
+        self.train_seg_losses = [[] for _ in range(len(models))]
+        self.train_disc_losses = []
+        self.train_da_losses = []
 
 
     def forward(self, inputs: List[torch.Tensor]):
@@ -60,18 +66,17 @@ class plDATrainerModule(pl.LightningModule):
         disc_loss = self.disc_loss(disc_out, disc_labels.long()) * self.hparams.disc_lambda
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
-        self.log("train/seg_loss_total", seg_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/disc_loss", disc_loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train/da_loss", da_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/disc_loss", disc_loss.item(), on_step=True, on_epoch=False, prog_bar=True)
+        self.log("train/da_loss", da_loss.item(), on_step=True, on_epoch=False, prog_bar=True)
+        self.train_disc_losses.append(disc_loss.item())
+        self.train_da_losses.append(da_loss.item())
+        self.disc_acc.update(disc_out.detach(), disc_labels.long())
         for i, metrics_obj in enumerate(self.metrics):
-            metrics_obj.train_auc.update(seg_out[i], batch_dict[i][1])
-            metrics_obj.train_auprc.update(seg_out[i], batch_dict[i][1])
-            metrics_obj.train_f1.update(seg_out[i], batch_dict[i][1])
-
-            self.log(f"train/{i}/seg_loss", seg_losses[i], on_step=False, on_epoch=True, prog_bar=True)
-            self.log(f"train/{i}/auc", metrics_obj.train_auc, on_step=False, on_epoch=True, prog_bar=True)
-            self.log(f"train/{i}/auprc", metrics_obj.train_auprc, on_step=False, on_epoch=True, prog_bar=True)
-            self.log(f"train/{i}/f1", metrics_obj.train_f1, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(f"train/{i}/seg_loss", seg_losses[i].item(), on_step=True, on_epoch=False, prog_bar=True)
+            self.train_seg_losses[i].append(seg_losses[i].item())
+            metrics_obj.train_auc.update(seg_out[i].detach(), batch_dict[i][1].detach())
+            metrics_obj.train_auprc.update(seg_out[i].detach(), batch_dict[i][1].detach())
+            metrics_obj.train_f1.update(seg_out[i].detach(), batch_dict[i][1].detach())
 
         seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
         seg_optimizer.zero_grad()
@@ -86,8 +91,23 @@ class plDATrainerModule(pl.LightningModule):
 
         return None # since manual optimization
 
-    def on_training_epoch_end(self):
-        pass
+    def on_train_epoch_end(self):
+        print("======== Training Metrics ========")
+        print(f"train/disc_loss", np.mean(self.train_disc_losses))
+        print(f"train/disc_acc", self.disc_acc.compute().item())
+        print(f"train/da_loss", np.mean(self.train_da_losses))
+        self.train_disc_losses = []
+        self.disc_acc.reset()
+        self.train_da_losses = []
+        for i, metrics_obj in enumerate(self.metrics):
+            print(f"train/{i}/seg_loss", np.mean(self.train_seg_losses[i]))
+            self.train_seg_losses[i] = []
+            print(f"train/{i}/auc", metrics_obj.train_auc.compute().item())
+            print(f"train/{i}/auprc", metrics_obj.train_auprc.compute().item())
+            print(f"train/{i}/f1", metrics_obj.train_f1.compute().item())
+            metrics_obj.train_auc.reset()
+            metrics_obj.train_auprc.reset()
+            metrics_obj.train_f1.reset()
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
         x, targets = batch
@@ -96,10 +116,6 @@ class plDATrainerModule(pl.LightningModule):
         self.metrics[dataloader_idx].val_auc.update(preds, targets.long())
         self.metrics[dataloader_idx].val_auprc.update(preds, targets.long())
         self.metrics[dataloader_idx].val_f1.update(preds, targets.long())
-
-        self.log(f"val/{dataloader_idx}/auc", self.metrics[dataloader_idx].val_auc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log(f"val/{dataloader_idx}/auprc", self.metrics[dataloader_idx].val_auprc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log(f"val/{dataloader_idx}/f1", self.metrics[dataloader_idx].val_f1, on_step=False, on_epoch=True, prog_bar=True)
 
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
@@ -110,13 +126,25 @@ class plDATrainerModule(pl.LightningModule):
         self.metrics[dataloader_idx].test_auprc.update(preds, targets.long())
         self.metrics[dataloader_idx].test_f1.update(preds, targets.long())
 
-        self.log(f"test/{dataloader_idx}/auc", self.metrics[dataloader_idx].test_auc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log(f"test/{dataloader_idx}/auprc", self.metrics[dataloader_idx].test_auprc, on_step=False, on_epoch=True, prog_bar=False)
-        self.log(f"test/{dataloader_idx}/f1", self.metrics[dataloader_idx].test_f1, on_step=False, on_epoch=True, prog_bar=False)
-
+    def on_validation_epoch_end(self):
+        print("======== Validation Metrics ========")
+        for i, metrics_obj in enumerate(self.metrics):
+            print(f"val/{i}/auc", metrics_obj.val_auc.compute().item())
+            print(f"val/{i}/auprc", metrics_obj.val_auprc.compute().item())
+            print(f"val/{i}/f1", metrics_obj.val_f1.compute().item())
+            metrics_obj.val_auc.reset()
+            metrics_obj.val_auprc.reset()
+            metrics_obj.val_f1.reset()
 
     def on_test_epoch_end(self):
-        pass
+        print("======== Test Metrics ========")
+        for i, metrics_obj in enumerate(self.metrics):
+            print(f"test/{i}/auc", metrics_obj.test_auc.compute().item())
+            print(f"test/{i}/auprc", metrics_obj.test_auprc.compute().item())
+            print(f"test/{i}/f1", metrics_obj.test_f1.compute().item())
+            metrics_obj.test_auc.reset()
+            metrics_obj.test_auprc.reset()
+            metrics_obj.test_f1.reset()
 
     def configure_optimizers(self):
         seg_params = list(self.encoder.parameters())

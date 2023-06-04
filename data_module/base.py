@@ -43,7 +43,7 @@ def before_after_ds(
         ds = ds.where(orbit_state_bool_arr == sat_orbit_state, drop=True)
     
     ds = ds.drop_dims('timepair')
-    ds = ds[['vv', 'vh', 'landslides']]
+    ds = ds[['vv', 'vh', 'landslides', 'dem']]
     before_ds = ds.sel(timestep=slice(None, event_start_date))
     after_ds = ds.sel(timestep=slice(event_end_date, None))
 
