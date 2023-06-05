@@ -12,9 +12,9 @@ class plDATrainerModule(pl.LightningModule):
             encoder: torch.nn.Module,
             models: List[torch.nn.Module],
             discriminator: torch.nn.Module,
-            model_losses: List[Union[str, Callable]],
+            model_losses: Dict[int, Callable],
             lr: float,
-            model_lambdas: List[float] = [1, 1, 1],
+            model_lambdas: Dict[int, float] = {0: 1},
             disc_lambda: float = 1,
             da_lambda: float = 1,
             device: Optional[torch.device] = None,
@@ -26,22 +26,11 @@ class plDATrainerModule(pl.LightningModule):
         self.models = models
         self.discriminator = discriminator
 
-        self.model_losses = []
-        for loss in model_losses:
-            if callable(loss):
-                criterion = loss
-            elif loss == 'bce':
-                criterion = torch.nn.BCEWithLogitsLoss()
-            else:
-                raise NotImplementedError
-            self.model_losses.append(criterion)
+        self.model_losses = model_losses
         self.disc_loss = torch.nn.CrossEntropyLoss()
         self.da_loss = domain_confusion_loss
         
-        metrics = []
-        for _ in range(len(models)):
-            metrics.append(BinarySegmentationMetricsWrapper(device))
-        self.metrics = torch.nn.ModuleList(metrics)
+        self.metrics = torch.nn.ModuleDict({i: BinarySegmentationMetricsWrapper(device) for i in model_losses.keys()})
         self.disc_acc = Accuracy(task='multiclass', num_classes=len(models), average='micro')
         
         self.train_seg_losses = [[] for _ in range(len(models))]
@@ -61,7 +50,7 @@ class plDATrainerModule(pl.LightningModule):
         Note: We assume batch_dict is idx -> input, label in the input order
         '''
         seg_out, disc_out = self([batch_dict[i][0] for i in range(len(batch_dict))])
-        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1].float()) for i, loss_fn in enumerate(self.model_losses)]
+        seg_losses = [loss_fn(seg_out[i], batch_dict[i][1].float()) for i, loss_fn in self.model_losses.items()]
         seg_loss = torch.sum(torch.stack(
             [seg_losses[i] * self.hparams.model_lambdas[i] for i in range(len(seg_losses))]))
         disc_labels = torch.cat([torch.ones(len(batch_dict[i][0])) * i for i in range(len(batch_dict))]).to(self.hparams.device)
@@ -73,7 +62,7 @@ class plDATrainerModule(pl.LightningModule):
         self.train_disc_losses.append(disc_loss.item())
         self.train_da_losses.append(da_loss.item())
         self.disc_acc.update(disc_out.detach(), disc_labels.long())
-        for i, metrics_obj in enumerate(self.metrics):
+        for i, metrics_obj in self.metrics.items():
             self.log(f"train/{i}/seg_loss", seg_losses[i].item(), on_step=True, on_epoch=False, prog_bar=True)
             self.train_seg_losses[i].append(seg_losses[i].item())
             for metric_value in metrics_obj.metrics_dict['train_'].values():
@@ -100,7 +89,7 @@ class plDATrainerModule(pl.LightningModule):
         self.train_disc_losses = []
         self.disc_acc.reset()
         self.train_da_losses = []
-        for i, metrics_obj in enumerate(self.metrics):
+        for i, metrics_obj in self.metrics.items():
             print(f"train/{i}/seg_loss", np.mean(self.train_seg_losses[i]))
             self.train_seg_losses[i] = []
             for metric_key, metric_value in metrics_obj.metrics_dict['train_'].items():
@@ -123,23 +112,23 @@ class plDATrainerModule(pl.LightningModule):
 
     def on_validation_epoch_end(self):
         print("======== Validation Metrics ========")
-        for i, metrics_obj in enumerate(self.metrics):
+        for i, metrics_obj in self.metrics.items():
             for metric_key, metric_value in metrics_obj.metrics_dict['val_'].items():
                 print(f"val/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
 
     def on_test_epoch_end(self):
         print("======== Test Metrics ========")
-        for i, metrics_obj in enumerate(self.metrics):
+        for i, metrics_obj in self.metrics.items():
             for metric_key, metric_value in metrics_obj.metrics_dict['test_'].items():
                 print(f"test/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
 
     def configure_optimizers(self):
         seg_params = list(self.encoder.parameters())
-        for model in self.models:
-            seg_params.extend(list(model.decoder.parameters()))
-            seg_params.extend(list(model.segmentation_head.parameters()))
+        for i in self.model_losses.keys():
+            seg_params.extend(list(self.models[i].decoder.parameters()))
+            seg_params.extend(list(self.models[i].segmentation_head.parameters()))
         
         seg_optimizer = torch.optim.Adam(params=seg_params, lr=self.hparams.lr)
         disc_optimizer = torch.optim.Adam(params=self.discriminator.parameters(), lr=self.hparams.lr)
@@ -214,7 +203,7 @@ if __name__ == '__main__':
         encoder,
         models,
         discriminator,
-        model_losses=['bce', 'bce', 'bce'],
+        model_losses=['bce', 'bce', 'bce'], # wrong but too lazy to fix
         lr=1e-3,
         device=device,
     )

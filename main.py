@@ -6,6 +6,7 @@ import segmentation_models_pytorch as smp
 from models.da_models import instantiate_da_models
 from models.discriminator import MLPDiscriminator
 from data_module.multi_dm import MultiBeforeAfterCubeDataModule
+from trainer_module.helpers import FocalTverskyLoss
 import utils
 
 from argparse import ArgumentParser
@@ -51,11 +52,9 @@ if __name__ == '__main__':
         encoder,
         models,
         discriminator,
-        model_losses=[
-            nn.BCEWithLogitsLoss(pos_weight=pos_weights[0]),
-            nn.BCEWithLogitsLoss(pos_weight=pos_weights[1]),
-            nn.BCEWithLogitsLoss(pos_weight=pos_weights[2]),
-        ],
+        model_losses={
+            0: FocalTverskyLoss(alpha=0.7, beta=0.3, gamma=0.75),
+        },
         lr=args.lr,
         device=device,
         model_lambdas=args.model_lambdas,
@@ -63,6 +62,7 @@ if __name__ == '__main__':
         da_lambda=args.da_lambda,
     )
 
+    ckpt_callback = pl.callbacks.ModelCheckpoint(monitor='')
     trainer = pl.Trainer(max_epochs=args.n_epochs)
     trainer.fit(da_trainer_module, datamodule=dm)
     trainer.validate(datamodule=dm, ckpt_path='best')

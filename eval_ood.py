@@ -12,7 +12,7 @@ if __name__ == '__main__':
     config = utils.parse_yaml('config/talakmau.yaml')
     
     state_dict_paths = [""]
-    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_heads=1, num_channels=4, classes=2)
+    encoder, models = instantiate_da_models(smp.UnetPlusPlus, 'resnet18', num_heads=1, num_channels=5, classes=1)
 
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
