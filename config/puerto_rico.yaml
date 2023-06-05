@@ -5,7 +5,7 @@ sat_orbit_state: 'dummy'
 timestep_length: 1
 event_start_date: '20170920'
 event_end_date: '20170921'
-input_vars: ['vv_before', 'vv_after', 'vh_before', 'vh_after']
+input_vars: ['vv_before', 'vv_after', 'vh_before', 'vh_after', 'dem']
 target: 'landslides'
 include_negatives: False
 split_fp: 'data/puerto_rico_70_20_10.yaml'

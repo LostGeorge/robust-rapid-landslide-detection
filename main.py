@@ -20,7 +20,6 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--n_epochs', type=int, default=10)
     parser.add_argument('--model_lambdas', nargs='+', type=float, default=None)
-    parser.add_argument('--model_pos_weights', nargs='+', type=float, default=None)
     parser.add_argument('--disc_lambda', type=float, default=1)
     parser.add_argument('--da_lambda', type=float, default=1)
     args = parser.parse_args()
@@ -43,11 +42,8 @@ if __name__ == '__main__':
     models = [model.to(device) for model in models]
 
     if args.model_lambdas is None:
-        args.model_lambdas = [1 for _ in range(len(models))]
-    if args.model_pos_weights is None:
-        pos_weights = [torch.tensor(1.) for _ in range(len(models))]
-    else:
-        pos_weights = [torch.tensor(w) for w in args.model_pos_weights]
+        args.model_lambdas = [1 for _ in range(len(models))] # more than needed, but keep for compatibility w/ list ordering
+    
     da_trainer_module = plDATrainerModule(
         encoder,
         models,
@@ -62,8 +58,9 @@ if __name__ == '__main__':
         da_lambda=args.da_lambda,
     )
 
-    ckpt_callback = pl.callbacks.ModelCheckpoint(monitor='')
-    trainer = pl.Trainer(max_epochs=args.n_epochs)
+    ckpt_callback = pl.callbacks.ModelCheckpoint(monitor='val/0/jaccard', mode='max')
+
+    trainer = pl.Trainer(max_epochs=args.n_epochs, val_check_interval=0.5)
     trainer.fit(da_trainer_module, datamodule=dm)
     trainer.validate(datamodule=dm, ckpt_path='best')
     trainer.test(datamodule=dm, ckpt_path='best')

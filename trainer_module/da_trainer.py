@@ -115,6 +115,7 @@ class plDATrainerModule(pl.LightningModule):
         for i, metrics_obj in self.metrics.items():
             for metric_key, metric_value in metrics_obj.metrics_dict['val_'].items():
                 print(f"val/{i}/{metric_key}", metric_value.compute().item())
+                self.log(f"val/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
 
     def on_test_epoch_end(self):
@@ -122,6 +123,7 @@ class plDATrainerModule(pl.LightningModule):
         for i, metrics_obj in self.metrics.items():
             for metric_key, metric_value in metrics_obj.metrics_dict['test_'].items():
                 print(f"test/{i}/{metric_key}", metric_value.compute().item())
+                self.log(f"test/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
 
     def configure_optimizers(self):
