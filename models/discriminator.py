@@ -18,7 +18,7 @@ class MLPDiscriminator(nn.Module):
             nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.Linear(encoder_dim, hidden_dims[0]),
-            act_fn()
+            act_fn(),
         ]
         for i in range(1, len(hidden_dims)):
             layers.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))

@@ -1,4 +1,4 @@
-from torchmetrics import AUROC, AveragePrecision, F1Score
+from torchmetrics import AUROC, AveragePrecision, F1Score, Precision, Recall
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,25 +14,23 @@ class BinarySegmentationMetricsWrapper(pl.LightningModule):
     
     def __init__(self, device=None) -> None:
         super().__init__()
+        splits = ['train_', 'val_', 'test_']
+        self.metrics_dict = nn.ModuleDict({split: self._generate_metrics_group(device) for split in splits})
+    
+    def _generate_metrics_group(self, device=None):
         if device is None:
-            self.train_auc = AUROC(task='binary', pos_label=1)
-            self.train_f1 = F1Score(task='binary')
-            self.train_auprc = AveragePrecision(task='binary', pos_label=1)
-            self.val_auc = AUROC(task='binary', pos_label=1)
-            self.val_f1 = F1Score(task='binary')
-            self.val_auprc = AveragePrecision(task='binary', pos_label=1)
-            self.test_auc = AUROC(task='binary', pos_label=1)
-            self.test_auprc = AveragePrecision(task='binary', pos_label=1)
-            self.test_f1 = F1Score(task='binary')
+            return nn.ModuleDict({
+                'auprc': AveragePrecision(task='binary'),
+                'f1': F1Score(task='binary'),
+                'precision': Precision(task='binary'),
+                'recall': Recall(task='binary'),
+            })
         else:
-            self.train_auc = AUROC(task='binary', pos_label=1).to(device)
-            self.train_f1 = F1Score(task='binary').to(device)
-            self.train_auprc = AveragePrecision(task='binary', pos_label=1).to(device)
-            self.val_auc = AUROC(task='binary', pos_label=1).to(device)
-            self.val_f1 = F1Score(task='binary').to(device)
-            self.val_auprc = AveragePrecision(task='binary', pos_label=1).to(device)
-            self.test_auc = AUROC(task='binary', pos_label=1).to(device)
-            self.test_auprc = AveragePrecision(task='binary', pos_label=1).to(device)
-            self.test_f1 = F1Score(task='binary').to(device)
+            return nn.ModuleDict({
+                'auprc': AveragePrecision(task='binary').to(device),
+                'f1': F1Score(task='binary').to(device),
+                'precision': Precision(task='binary').to(device),
+                'recall': Recall(task='binary').to(device),
+            })
 
 

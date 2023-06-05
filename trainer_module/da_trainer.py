@@ -28,8 +28,10 @@ class plDATrainerModule(pl.LightningModule):
 
         self.model_losses = []
         for loss in model_losses:
-            if loss == 'ce' or loss == torch.nn.CrossEntropyLoss:
-                criterion = torch.nn.CrossEntropyLoss()
+            if callable(loss):
+                criterion = loss
+            elif loss == 'bce':
+                criterion = torch.nn.BCEWithLogitsLoss()
             else:
                 raise NotImplementedError
             self.model_losses.append(criterion)
@@ -74,9 +76,8 @@ class plDATrainerModule(pl.LightningModule):
         for i, metrics_obj in enumerate(self.metrics):
             self.log(f"train/{i}/seg_loss", seg_losses[i].item(), on_step=True, on_epoch=False, prog_bar=True)
             self.train_seg_losses[i].append(seg_losses[i].item())
-            metrics_obj.train_auc.update(seg_out[i].detach(), batch_dict[i][1].detach())
-            metrics_obj.train_auprc.update(seg_out[i].detach(), batch_dict[i][1].detach())
-            metrics_obj.train_f1.update(seg_out[i].detach(), batch_dict[i][1].detach())
+            for metric_value in metrics_obj.metrics_dict['train_'].values():
+                metric_value.update(seg_out[i].detach(), batch_dict[i][1].detach())
 
         seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
         seg_optimizer.zero_grad()
@@ -102,49 +103,37 @@ class plDATrainerModule(pl.LightningModule):
         for i, metrics_obj in enumerate(self.metrics):
             print(f"train/{i}/seg_loss", np.mean(self.train_seg_losses[i]))
             self.train_seg_losses[i] = []
-            print(f"train/{i}/auc", metrics_obj.train_auc.compute().item())
-            print(f"train/{i}/auprc", metrics_obj.train_auprc.compute().item())
-            print(f"train/{i}/f1", metrics_obj.train_f1.compute().item())
-            metrics_obj.train_auc.reset()
-            metrics_obj.train_auprc.reset()
-            metrics_obj.train_f1.reset()
+            for metric_key, metric_value in metrics_obj.metrics_dict['train_'].items():
+                print(f"train/{i}/{metric_key}", metric_value.compute().item())
+                metric_value.reset()
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        self.metrics[dataloader_idx].val_auc.update(preds, targets.long())
-        self.metrics[dataloader_idx].val_auprc.update(preds, targets.long())
-        self.metrics[dataloader_idx].val_f1.update(preds, targets.long())
-
+        for metric_value in self.metrics[dataloader_idx].metrics_dict['val_'].values():
+            metric_value.update(preds, targets.long())
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        self.metrics[dataloader_idx].test_auc.update(preds, targets.long())
-        self.metrics[dataloader_idx].test_auprc.update(preds, targets.long())
-        self.metrics[dataloader_idx].test_f1.update(preds, targets.long())
+        for metric_value in self.metrics[dataloader_idx].metrics_dict['test_'].values():
+            metric_value.update(preds, targets.long())
 
     def on_validation_epoch_end(self):
         print("======== Validation Metrics ========")
         for i, metrics_obj in enumerate(self.metrics):
-            print(f"val/{i}/auc", metrics_obj.val_auc.compute().item())
-            print(f"val/{i}/auprc", metrics_obj.val_auprc.compute().item())
-            print(f"val/{i}/f1", metrics_obj.val_f1.compute().item())
-            metrics_obj.val_auc.reset()
-            metrics_obj.val_auprc.reset()
-            metrics_obj.val_f1.reset()
+            for metric_key, metric_value in metrics_obj.metrics_dict['val_'].items():
+                print(f"val/{i}/{metric_key}", metric_value.compute().item())
+                metric_value.reset()
 
     def on_test_epoch_end(self):
         print("======== Test Metrics ========")
         for i, metrics_obj in enumerate(self.metrics):
-            print(f"test/{i}/auc", metrics_obj.test_auc.compute().item())
-            print(f"test/{i}/auprc", metrics_obj.test_auprc.compute().item())
-            print(f"test/{i}/f1", metrics_obj.test_f1.compute().item())
-            metrics_obj.test_auc.reset()
-            metrics_obj.test_auprc.reset()
-            metrics_obj.test_f1.reset()
+            for metric_key, metric_value in metrics_obj.metrics_dict['test_'].items():
+                print(f"test/{i}/{metric_key}", metric_value.compute().item())
+                metric_value.reset()
 
     def configure_optimizers(self):
         seg_params = list(self.encoder.parameters())
@@ -225,7 +214,7 @@ if __name__ == '__main__':
         encoder,
         models,
         discriminator,
-        model_losses=['ce', 'ce', 'ce'],
+        model_losses=['bce', 'bce', 'bce'],
         lr=1e-3,
         device=device,
     )

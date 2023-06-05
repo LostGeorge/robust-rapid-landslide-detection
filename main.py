@@ -1,6 +1,7 @@
 from trainer_module.da_trainer import plDATrainerModule
 import pytorch_lightning as pl
 import torch
+import torch.nn as nn
 import segmentation_models_pytorch as smp
 from models.da_models import instantiate_da_models
 from models.discriminator import MLPDiscriminator
@@ -18,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--n_epochs', type=int, default=10)
     parser.add_argument('--model_lambdas', nargs='+', type=float, default=None)
+    parser.add_argument('--model_pos_weights', nargs='+', type=float, default=None)
     parser.add_argument('--disc_lambda', type=float, default=1)
     parser.add_argument('--da_lambda', type=float, default=1)
     args = parser.parse_args()
@@ -41,11 +43,19 @@ if __name__ == '__main__':
 
     if args.model_lambdas is None:
         args.model_lambdas = [1 for _ in range(len(models))]
+    if args.model_pos_weights is None:
+        pos_weights = [torch.tensor(1.) for _ in range(len(models))]
+    else:
+        pos_weights = [torch.tensor(w) for w in args.model_pos_weights]
     da_trainer_module = plDATrainerModule(
         encoder,
         models,
         discriminator,
-        model_losses=['ce', 'ce', 'ce'],
+        model_losses=[
+            nn.BCEWithLogitsLoss(pos_weight=pos_weights[0]),
+            nn.BCEWithLogitsLoss(pos_weight=pos_weights[1]),
+            nn.BCEWithLogitsLoss(pos_weight=pos_weights[2]),
+        ],
         lr=args.lr,
         device=device,
         model_lambdas=args.model_lambdas,
