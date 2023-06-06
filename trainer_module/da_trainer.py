@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any, List, Union, Callable, Optional, Dict, Tuple
 from torchmetrics import AUROC, AveragePrecision, F1Score, Accuracy
 
-from trainer_module.helpers import BinarySegmentationMetricsWrapper, domain_confusion_loss, WarmupLR
+from trainer_module.helpers import BinarySegmentationMetricsWrapper, domain_confusion_loss
 
 class plDATrainerModule(pl.LightningModule):
     def __init__(
@@ -70,7 +70,7 @@ class plDATrainerModule(pl.LightningModule):
             for metric_value in metrics_obj.metrics_dict['train_'].values():
                 metric_value.update(seg_out[idx].detach(), batch_dict[idx][1].detach())
 
-        seg_optimizer, disc_optimizer, da_optimizer, *_ = self.optimizers()
+        seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
         seg_optimizer.zero_grad()
         self.manual_backward(seg_loss, retain_graph=True)
         seg_optimizer.step()
@@ -98,7 +98,7 @@ class plDATrainerModule(pl.LightningModule):
             for metric_key, metric_value in metrics_obj.metrics_dict['train_'].items():
                 print(f"train/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
-        _, _, _, seg_scheduler, disc_scheduler, da_scheduler = self.optimizers()
+        seg_scheduler, disc_scheduler, da_scheduler = self.lr_schedulers()
         seg_scheduler.step()
         disc_scheduler.step()
         da_scheduler.step()
@@ -113,7 +113,7 @@ class plDATrainerModule(pl.LightningModule):
         for metric_value in self.metrics[str(dataloader_idx)].metrics_dict['val_'].values():
             metric_value.update(preds, targets.long())
 
-    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
+    def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
         if str(dataloader_idx) not in self.metrics.keys():
             return
         x, targets = batch
@@ -149,11 +149,11 @@ class plDATrainerModule(pl.LightningModule):
         da_optimizer = torch.optim.Adam(params=self.encoder.parameters(), lr=self.hparams.lr)
         
         seg_scheduler = torch.optim.lr_scheduler.StepLR(seg_optimizer, step_size=1, gamma=0.7)
-        disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0, total_iters=self.hparams.d_delay)
-        da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0, total_iters=self.hparams.d_delay)
+        disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0.001, total_iters=self.hparams.d_delay)
+        da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0.001, total_iters=self.hparams.d_delay)
 
 
-        return seg_optimizer, disc_optimizer, da_optimizer, seg_scheduler, disc_scheduler, da_scheduler
+        return [seg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, disc_scheduler, da_scheduler]
 
 
 if __name__ == '__main__':

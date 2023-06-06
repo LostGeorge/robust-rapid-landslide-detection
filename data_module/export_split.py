@@ -41,7 +41,8 @@ ba_ds = before_after_ds(
     aggregation='mean', # doesn't matter for this, dummy input
     timestep_length=args.timestep_length,
     event_start_date=args.event_start_date,
-    event_end_date=args.event_end_date
+    event_end_date=args.event_end_date,
+    sat_orbit_state=args.sat_orbit_state
     )
 
 batches, mean_std_dict = batching_dataset(ba_ds, args.input_vars, args.target, args.include_negatives)
