@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 import numpy as np
 from torchmetrics import AUROC, AveragePrecision, F1Score, Accuracy
 from ot import sliced_wasserstein_distance
@@ -44,11 +45,13 @@ class plDATrainerModule(pl.LightningModule):
         self.train_da_losses = []
 
         self.train_enc_outs = [None for _ in range(len(models))]
+        self.train_epoch_ct = 0
 
 
     def forward(self, inputs: List[torch.Tensor]):
         enc_out_stages = [self.encoder(x) for x in inputs] # List[List[tensor]]
-        enc_out_embs = [stages[-1] for stages in enc_out_stages]
+        enc_out_embs = [torch.cat([F.adaptive_avg_pool2d(stages[j], 1)[:, :, 0, 0] \
+             for j in range(1, len(stages))], dim=1) for stages in enc_out_stages]
         disc_out = self.discriminator(torch.cat(enc_out_embs, dim=0))
         dec_out = [self.models[self.model_evals[i]].decoder(*stages) for i, stages in enumerate(enc_out_stages)]
         seg_out = [self.models[self.model_evals[i]].segmentation_head(out)[:, 0, ...] for i, out in enumerate(dec_out)]
@@ -67,11 +70,11 @@ class plDATrainerModule(pl.LightningModule):
         da_loss = self.da_loss(disc_out) * self.hparams.da_lambda
         
         for i, enc_out in enumerate(enc_out_embs):
-            enc_out_pool = torch.nn.functional.adaptive_avg_pool2d(enc_out.detach(), 1)[:, :, 0, 0]
+            enc_out_numpy = enc_out.detach().cpu().numpy()
             if self.train_enc_outs[i] is None:
-                self.train_enc_outs[i] = enc_out_pool.cpu().numpy()
+                self.train_enc_outs[i] = enc_out_numpy
             else:
-                self.train_enc_outs[i] = np.vstack((self.train_enc_outs[i], enc_out_pool.cpu().numpy()))
+                self.train_enc_outs[i] = np.vstack((self.train_enc_outs[i], enc_out_numpy))
                 
         self.log("train/disc_loss", disc_loss.item(), on_step=True, on_epoch=False, prog_bar=True)
         self.log("train/da_loss", da_loss.item(), on_step=True, on_epoch=False, prog_bar=True)
@@ -88,16 +91,21 @@ class plDATrainerModule(pl.LightningModule):
             for metric_value in metrics_obj.metrics_dict['train_'].values():
                 metric_value.update(seg_out[idx].detach(), batch_dict[idx][1].detach())
 
-        seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
-        seg_optimizer.zero_grad()
-        self.manual_backward(seg_loss, retain_graph=True)
-        seg_optimizer.step()
-        disc_optimizer.zero_grad()
-        self.manual_backward(disc_loss, retain_graph=True)
-        disc_optimizer.step()
-        da_optimizer.zero_grad()
-        self.manual_backward(da_loss)
-        da_optimizer.step()
+        seg_optimizer, seg_reg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
+        if self.train_epoch_ct >= self.hparams.d_delay:
+            seg_reg_optimizer.zero_grad()
+            self.manual_backward(seg_loss, retain_graph=True)
+            seg_reg_optimizer.step()
+            disc_optimizer.zero_grad()
+            self.manual_backward(disc_loss, retain_graph=True)
+            disc_optimizer.step()
+            da_optimizer.zero_grad()
+            self.manual_backward(da_loss)
+            da_optimizer.step()
+        else:
+            seg_optimizer.zero_grad()
+            self.manual_backward(seg_loss)
+            seg_optimizer.step()
 
         return None # since manual optimization
 
@@ -117,15 +125,19 @@ class plDATrainerModule(pl.LightningModule):
             for metric_key, metric_value in metrics_obj.metrics_dict['train_'].items():
                 print(f"train/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
-        seg_scheduler, disc_scheduler, da_scheduler = self.lr_schedulers()
+        # seg_scheduler, disc_scheduler, da_scheduler = self.lr_schedulers()
+        # seg_scheduler.step()
+        # disc_scheduler.step()
+        # da_scheduler.step()
+        seg_scheduler, seg_reg_scheduler = self.lr_schedulers()
         seg_scheduler.step()
-        disc_scheduler.step()
-        da_scheduler.step()
+        seg_reg_scheduler.step()
 
         for i, j in itertools.combinations(range(len(self.models)), 2):
             w_dist = sliced_wasserstein_distance(self.train_enc_outs[i], self.train_enc_outs[j])
             print(f"{i} {j} wasserstein distance: {w_dist}")
         self.train_enc_outs = [None for _ in range(len(self.models))]
+        self.train_epoch_ct += 1
         
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
@@ -169,14 +181,17 @@ class plDATrainerModule(pl.LightningModule):
             seg_params.extend(list(self.models[i].segmentation_head.parameters()))
         
         seg_optimizer = torch.optim.Adam(params=seg_params, lr=self.hparams.lr)
+        seg_reg_optimizer = torch.optim.Adam(params=self.encoder.parameters(), lr=self.hparams.lr)
         disc_optimizer = torch.optim.Adam(params=self.discriminator.parameters(), lr=self.hparams.lr)
         da_optimizer = torch.optim.Adam(params=self.encoder.parameters(), lr=self.hparams.lr)
         
         seg_scheduler = torch.optim.lr_scheduler.StepLR(seg_optimizer, step_size=1, gamma=0.9)
-        disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
-        da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
+        seg_reg_scheduler = torch.optim.lr_scheduler.StepLR(seg_reg_optimizer, step_size=1, gamma=0.9)
+        # disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
+        # da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
 
-        return [seg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, disc_scheduler, da_scheduler]
+        # return [seg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, disc_scheduler, da_scheduler]
+        return [seg_optimizer, seg_reg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, seg_reg_scheduler]
 
 
 if __name__ == '__main__':

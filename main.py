@@ -40,7 +40,7 @@ if __name__ == '__main__':
     else:
         device = torch.device('cpu')
     encoder_out_size = utils.get_encoder_output_channels(args.encoder)
-    discriminator = MLPDiscriminator(encoder_out_size, [encoder_out_size, encoder_out_size], len(models)).to(device)
+    discriminator = MLPDiscriminator(encoder_out_size, [encoder_out_size], len(models)).to(device)
     # discriminator = LinearDiscriminator(encoder_out_size, len(models)).to(device)
     models = [model.to(device) for model in models]
 
