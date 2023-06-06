@@ -10,6 +10,69 @@ import torch
 from typing import Any, List
 from torchmetrics import AUROC, AveragePrecision, F1Score
 
+class plMLP(pl.LightningModule):
+    def __init__(
+        self,
+        encoder,
+        lr: float = 0.001,
+        weight_decay: float = 0.0005,
+        num_channels: int = 1,
+        loss='mse'
+    ):
+        super().__init__()
+        self.save_hyperparameters(logger=False)
+        
+        self.encoder = encoder
+        self.prediction_head = torch.nn.Linear(in_features=2048*7*7, out_features=2, bias=True)
+
+        if loss == 'mse':
+            self.criterion = torch.nn.MSELoss()
+
+    def forward(self, x: torch.Tensor):
+        encoded = self.encoder(x)[-1] # grab the final encoded layer
+        out = self.prediction_head(encoded.flatten())
+        return out
+
+    def step(self, batch: Any):
+        x, y = batch
+        y = y.long()
+        preds = self.forward(x)
+        loss = self.criterion(preds, y)
+        return loss, preds, y, x
+
+    def training_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets, inputs = self.step(batch)
+
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        return {"loss": loss, "preds": preds, "targets": targets, "inputs": inputs}
+
+    def on_training_epoch_end(self):
+        pass
+
+    def validation_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets, _ = self.step(batch)
+
+        # log val metrics
+
+        self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        return {"loss": loss, "preds": preds, "targets": targets}
+
+    def test_step(self, batch: Any, batch_idx: int):
+        loss, preds, targets, _ = self.step(batch)
+
+        self.log("test/loss", loss, on_step=False, on_epoch=True)
+        return {"loss": loss, "preds": preds, "targets": targets}
+
+    def on_test_epoch_end(self):
+        pass
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            params=self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
+        )
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler, "monitor": "train/loss"}
+
 
 class plUNET(pl.LightningModule):
     def __init__(

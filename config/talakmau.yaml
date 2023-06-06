@@ -1,0 +1,13 @@
+ds_path: 'data/talakmau_indonesia.zarr'
+ba_vars: ['vv', 'vh']
+aggregation: 'mean'
+sat_orbit_state: 'd'
+timestep_length: 1
+event_start_date: '20220225'
+event_end_date: '20220226'
+input_vars: ['vv_before', 'vv_after', 'vh_before', 'vh_after', 'dem']
+target: 'landslides'
+include_negatives: False
+split_fp: 'data/talakmau_0_0_100.yaml'
+batch_size: 32
+num_workers: 4
