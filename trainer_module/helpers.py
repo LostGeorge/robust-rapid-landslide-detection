@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
+
 def domain_confusion_loss(disc_logits):
     '''
     disc_logits: (N, D) tensor where D is the number of domains
@@ -65,5 +66,4 @@ class FocalTverskyLoss(nn.Module):
         FocalTversky = (1 - Tversky)**self.gamma
                        
         return FocalTversky
-
 

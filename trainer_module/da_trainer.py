@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any, List, Union, Callable, Optional, Dict, Tuple
 from torchmetrics import AUROC, AveragePrecision, F1Score, Accuracy
 
-from trainer_module.helpers import BinarySegmentationMetricsWrapper, domain_confusion_loss
+from trainer_module.helpers import BinarySegmentationMetricsWrapper, domain_confusion_loss, WarmupLR
 
 class plDATrainerModule(pl.LightningModule):
     def __init__(
@@ -17,6 +17,7 @@ class plDATrainerModule(pl.LightningModule):
             model_lambdas: Dict[int, float] = {0: 1},
             disc_lambda: float = 1,
             da_lambda: float = 1,
+            d_delay: int = 3,
             device: Optional[torch.device] = None,
     ):
         super().__init__()
@@ -30,7 +31,7 @@ class plDATrainerModule(pl.LightningModule):
         self.disc_loss = torch.nn.CrossEntropyLoss()
         self.da_loss = domain_confusion_loss
         
-        self.metrics = torch.nn.ModuleDict({i: BinarySegmentationMetricsWrapper(device) for i in model_losses.keys()})
+        self.metrics = torch.nn.ModuleDict({str(i): BinarySegmentationMetricsWrapper(device) for i in model_losses.keys()})
         self.disc_acc = Accuracy(task='multiclass', num_classes=len(models), average='micro')
         
         self.train_seg_losses = [[] for _ in range(len(models))]
@@ -63,12 +64,13 @@ class plDATrainerModule(pl.LightningModule):
         self.train_da_losses.append(da_loss.item())
         self.disc_acc.update(disc_out.detach(), disc_labels.long())
         for i, metrics_obj in self.metrics.items():
-            self.log(f"train/{i}/seg_loss", seg_losses[i].item(), on_step=True, on_epoch=False, prog_bar=True)
-            self.train_seg_losses[i].append(seg_losses[i].item())
+            idx = int(i)
+            self.log(f"train/{i}/seg_loss", seg_losses[idx].item(), on_step=True, on_epoch=False, prog_bar=True)
+            self.train_seg_losses[idx].append(seg_losses[idx].item())
             for metric_value in metrics_obj.metrics_dict['train_'].values():
-                metric_value.update(seg_out[i].detach(), batch_dict[i][1].detach())
+                metric_value.update(seg_out[idx].detach(), batch_dict[idx][1].detach())
 
-        seg_optimizer, disc_optimizer, da_optimizer = self.optimizers()
+        seg_optimizer, disc_optimizer, da_optimizer, *_ = self.optimizers()
         seg_optimizer.zero_grad()
         self.manual_backward(seg_loss, retain_graph=True)
         seg_optimizer.step()
@@ -90,24 +92,34 @@ class plDATrainerModule(pl.LightningModule):
         self.disc_acc.reset()
         self.train_da_losses = []
         for i, metrics_obj in self.metrics.items():
-            print(f"train/{i}/seg_loss", np.mean(self.train_seg_losses[i]))
-            self.train_seg_losses[i] = []
+            idx = int(i)
+            print(f"train/{i}/seg_loss", np.mean(self.train_seg_losses[idx]))
+            self.train_seg_losses[idx] = []
             for metric_key, metric_value in metrics_obj.metrics_dict['train_'].items():
                 print(f"train/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
+        _, _, _, seg_scheduler, disc_scheduler, da_scheduler = self.optimizers()
+        seg_scheduler.step()
+        disc_scheduler.step()
+        da_scheduler.step()
+        
 
     def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
+        if str(dataloader_idx) not in self.metrics.keys():
+            return
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        for metric_value in self.metrics[dataloader_idx].metrics_dict['val_'].values():
+        for metric_value in self.metrics[str(dataloader_idx)].metrics_dict['val_'].values():
             metric_value.update(preds, targets.long())
 
     def test_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
+        if str(dataloader_idx) not in self.metrics.keys():
+            return
         x, targets = batch
         preds = self.models[dataloader_idx](x)[:, 0, ...]
 
-        for metric_value in self.metrics[dataloader_idx].metrics_dict['test_'].values():
+        for metric_value in self.metrics[str(dataloader_idx)].metrics_dict['test_'].values():
             metric_value.update(preds, targets.long())
 
     def on_validation_epoch_end(self):
@@ -135,8 +147,13 @@ class plDATrainerModule(pl.LightningModule):
         seg_optimizer = torch.optim.Adam(params=seg_params, lr=self.hparams.lr)
         disc_optimizer = torch.optim.Adam(params=self.discriminator.parameters(), lr=self.hparams.lr)
         da_optimizer = torch.optim.Adam(params=self.encoder.parameters(), lr=self.hparams.lr)
-        # TODO: maybe add schedulers (not sure if good idea)
-        return seg_optimizer, disc_optimizer, da_optimizer
+        
+        seg_scheduler = torch.optim.lr_scheduler.StepLR(seg_optimizer, step_size=1, gamma=0.7)
+        disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0, total_iters=self.hparams.d_delay)
+        da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0, total_iters=self.hparams.d_delay)
+
+
+        return seg_optimizer, disc_optimizer, da_optimizer, seg_scheduler, disc_scheduler, da_scheduler
 
 
 if __name__ == '__main__':
