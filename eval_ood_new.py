@@ -15,7 +15,7 @@ from argparse import ArgumentParser
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument('--dm_configs', nargs='+', type=str, default=['config/talakmau.yaml'])
+    parser.add_argument('--dm_configs', nargs='+', type=str, default=['config/talakmau_70_30.yaml'])
     parser.add_argument('--encoder', type=str, default='resnet50')
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--n_epochs', type=int, default=10)
@@ -35,13 +35,13 @@ if __name__ == '__main__':
 
     n_channels = len(configs[0]['input_vars'])
     
-    encoder, models = instantiate_da_models(smp.UnetPlusPlus, args.encoder, num_channels=n_channels, classes=1)
+    encoder, models = instantiate_da_models(smp.UnetPlusPlus, args.encoder, num_channels=n_channels, classes=1, num_heads=2)
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
     else:
         device = torch.device('cpu')
     encoder_out_size = utils.get_encoder_output_channels(args.encoder)
-    discriminator = MLPDiscriminator(encoder_out_size, [encoder_out_size], len(models)).to(device)
+    discriminator = MLPDiscriminator(encoder_out_size, [encoder_out_size, encoder_out_size], len(models)).to(device)
     models = [model.to(device) for model in models]
 
     if args.model_lambdas is None:
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         models,
         discriminator,
         model_losses={
-            0: FocalTverskyLoss(alpha=0.6, beta=0.4, gamma=0.75),
+            0: FocalTverskyLoss(alpha=0.9, beta=0., gamma=0.75),
         },
         lr=args.lr,
         device=device,
@@ -68,5 +68,5 @@ if __name__ == '__main__':
 
     trainer = pl.Trainer(max_epochs=args.n_epochs, val_check_interval=0.25, callbacks=[ckpt_seg_callback])
 
-    state_dict_path = "lightning_logs/version_5/checkpoints/epoch=1-step=219.ckpt"
+    state_dict_path = "last.ckpt"
     trainer.test(model=da_trainer_module, datamodule=dm, ckpt_path=state_dict_path)

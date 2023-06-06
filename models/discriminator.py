@@ -29,5 +29,22 @@ class MLPDiscriminator(nn.Module):
     def forward(self, enc_out):
         return self.model(enc_out)
 
+class LinearDiscriminator(nn.Module):
+    def __init__(
+            self,
+            encoder_dim: int,
+            n_domains: int = 3,
+            ) -> None:
+        super().__init__()
+        layers = [
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(encoder_dim, n_domains),
+        ]
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, enc_out):
+        return self.model(enc_out)
+
 
 
