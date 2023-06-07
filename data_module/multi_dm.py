@@ -101,6 +101,20 @@ class MultiBeforeAfterCubeDataModule(LightningDataModule):
         ) for dm in self.dms]
         return loaders
 
+    def predict_dataloader(self):
+        '''
+        Using this to predict on training data
+        '''
+        loaders = [DataLoader(
+            dataset=dm.data_train,
+            batch_size=dm.hparams.batch_size,
+            num_workers=dm.hparams.num_workers,
+            pin_memory=dm.hparams.pin_memory,
+            shuffle=False,
+            persistent_workers=(dm.hparams.num_workers > 0)
+        ) for dm in self.dms]
+        return loaders
+
 class InfiniteMultiDataLoader(DataLoader):
 
     DUMMY_LEN=1e6

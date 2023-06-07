@@ -47,6 +47,12 @@ class plDATrainerModule(pl.LightningModule):
         self.train_enc_outs = [None for _ in range(len(models))]
         self.train_epoch_ct = 0
 
+        self.epoch_disc_losses = []
+        self.epoch_da_losses = []
+        self.epoch_disc_accs = []
+        self.epoch_wasserstein_dists = {(i, j): [] for i, j in itertools.combinations(range(len(self.models)), 2)}
+
+        self.p_num = 0
 
     def forward(self, inputs: List[torch.Tensor]):
         '''
@@ -121,6 +127,11 @@ class plDATrainerModule(pl.LightningModule):
         print(f"train/disc_loss", np.mean(self.train_disc_losses))
         print(f"train/disc_acc", self.disc_acc.compute().item())
         print(f"train/da_loss", np.mean(self.train_da_losses))
+
+        self.epoch_disc_accs.append(self.disc_acc.compute().item())
+        self.epoch_disc_losses.append(np.mean(self.train_disc_losses))
+        self.epoch_da_losses.append(np.mean(self.train_da_losses))
+
         self.train_disc_losses = []
         self.disc_acc.reset()
         self.train_da_losses = []
@@ -136,13 +147,17 @@ class plDATrainerModule(pl.LightningModule):
         # seg_scheduler.step()
         # disc_scheduler.step()
         # da_scheduler.step()
-        seg_scheduler, seg_reg_scheduler = self.lr_schedulers()
+        seg_scheduler, seg_reg_scheduler, disc_scheduler, da_scheduler = self.lr_schedulers()
         seg_scheduler.step()
-        seg_reg_scheduler.step()
+        seg_reg_scheduler.step() # to match lr once it takes over
+        if self.train_epoch_ct >= self.hparams.d_delay:
+            disc_scheduler.step()
+            da_scheduler.step()
 
         for i, j in itertools.combinations(range(len(self.models)), 2):
             w_dist = sliced_wasserstein_distance(self.train_enc_outs[i], self.train_enc_outs[j])
             print(f"{i} {j} wasserstein distance: {w_dist}")
+            self.epoch_wasserstein_dists[(i, j)].append(w_dist)
         self.train_enc_outs = [None for _ in range(len(self.models))]
         self.train_epoch_ct += 1
         
@@ -181,6 +196,43 @@ class plDATrainerModule(pl.LightningModule):
                 self.log(f"test/{i}/{metric_key}", metric_value.compute().item())
                 metric_value.reset()
 
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
+        '''
+        Use this to generate encoder outputs for each dataloader
+        '''
+        x, targets = batch
+        stages = self.encoder(x)
+        enc_out_embs = torch.cat([F.adaptive_avg_pool2d(stages[j], 1)[:, :, 0, 0] \
+             for j in range(1, len(stages))], dim=1)
+        enc_out_numpy = enc_out_embs.detach().cpu().numpy()
+        if self.pred_enc_outs[dataloader_idx] is None:
+            self.pred_enc_outs[dataloader_idx] = enc_out_numpy
+        else:
+            self.pred_enc_outs[dataloader_idx] = np.vstack(
+                (self.pred_enc_outs[dataloader_idx], enc_out_numpy))
+        if self.p_num == 0:
+            landslide_ratios = torch.sum(targets, dim=(-1, -2)) / 128**2
+            landslide_ratios_numpy = landslide_ratios.detach().cpu().numpy()
+            self.pred_landslide_ratios[dataloader_idx] = np.append(
+                self.pred_landslide_ratios[dataloader_idx], landslide_ratios_numpy, axis=0)
+
+    def on_predict_epoch_start(self):
+        self.pred_enc_outs = [None for _ in range(len(self.models))]
+        self.pred_landslide_ratios = [np.array([]) for _ in range(len(self.models))]
+
+    def on_predict_epoch_end(self):
+        for i, preds in enumerate(self.pred_enc_outs):
+            fp = f'data/p{self.p_num}_{i}_preds.npy'
+            np.save(fp, preds)
+            print("saved train encoder predictions to", fp)
+
+            if self.p_num == 0:
+                fp = f'data/{i}_ratios.npy'
+                np.save(fp, self.pred_landslide_ratios[i])
+                print("saved train ratios to", fp)
+
+        self.p_num += 1
+
     def configure_optimizers(self):
         seg_params = list(self.encoder.parameters())
         for i in self.model_losses.keys():
@@ -194,11 +246,14 @@ class plDATrainerModule(pl.LightningModule):
         
         seg_scheduler = torch.optim.lr_scheduler.StepLR(seg_optimizer, step_size=1, gamma=0.9)
         seg_reg_scheduler = torch.optim.lr_scheduler.StepLR(seg_reg_optimizer, step_size=1, gamma=0.9)
+        disc_scheduler = torch.optim.lr_scheduler.StepLR(disc_optimizer, step_size=1, gamma=1.0)
+        da_scheduler = torch.optim.lr_scheduler.StepLR(da_optimizer, step_size=1, gamma=1.0)
         # disc_scheduler = torch.optim.lr_scheduler.ConstantLR(disc_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
         # da_scheduler = torch.optim.lr_scheduler.ConstantLR(da_optimizer, factor=0.00001, total_iters=self.hparams.d_delay)
 
         # return [seg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, disc_scheduler, da_scheduler]
-        return [seg_optimizer, seg_reg_optimizer, disc_optimizer, da_optimizer], [seg_scheduler, seg_reg_scheduler]
+        return [seg_optimizer, seg_reg_optimizer, disc_optimizer, da_optimizer], \
+            [seg_scheduler, seg_reg_scheduler, disc_scheduler, da_scheduler]
 
 
 if __name__ == '__main__':

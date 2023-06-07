@@ -35,6 +35,7 @@ if __name__ == '__main__':
 
     n_channels = len(configs[0]['input_vars'])
     encoder, models = instantiate_da_models(smp.UnetPlusPlus, args.encoder, num_channels=n_channels, classes=1, num_heads=len(configs))
+    # encoder, models = instantiate_da_models(smp.Unet, args.encoder, num_channels=n_channels, classes=1, num_heads=len(configs))
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
     else:
@@ -77,7 +78,13 @@ if __name__ == '__main__':
     trainer.save_checkpoint(args.last_ckpt_path)
 
     trainer.validate(datamodule=dm, ckpt_path='best')
+    trainer.predict(datamodule=dm, ckpt_path='best')
     # trainer.test(datamodule=dm, ckpt_path='best')
 
     trainer.validate(datamodule=dm, ckpt_path=args.last_ckpt_path)
+    trainer.predict(datamodule=dm, ckpt_path=args.last_ckpt_path)
     # trainer.test(datamodule=dm, ckpt_path=args.last_ckpt_path)
+    print("da losses:", da_trainer_module.epoch_da_losses)
+    print("disc losses:", da_trainer_module.epoch_disc_losses)
+    print("disc accs:", da_trainer_module.epoch_disc_accs)
+    print("w dists:", da_trainer_module.epoch_wasserstein_dists)
