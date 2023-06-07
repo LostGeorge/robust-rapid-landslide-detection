@@ -15,14 +15,14 @@ from argparse import ArgumentParser
 if __name__ == '__main__':
 
     parser = ArgumentParser()
-    parser.add_argument('--dm_configs', nargs='+', type=str, default=['config/hokkaido.yaml', 'config/kaikoura.yaml', 'config/puerto_rico.yaml'])
+    parser.add_argument('--dm_configs', nargs='+', type=str, default=['config/hokkaido.yaml', 'config/talakmau_70_30.yaml'])
     parser.add_argument('--encoder', type=str, default='resnet50')
     parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--n_epochs', type=int, default=10)
+    parser.add_argument('--n_epochs', type=int, default=30)
     parser.add_argument('--model_lambdas', nargs='+', type=float, default=None)
     parser.add_argument('--disc_lambda', type=float, default=1)
     parser.add_argument('--da_lambda', type=float, default=1)
-    parser.add_argument('--d_delay', type=int, default=3)
+    parser.add_argument('--d_delay', type=int, default=12)
     parser.add_argument('--last_ckpt_path', type=str, default='last.ckpt')
     args = parser.parse_args()
 
@@ -55,6 +55,7 @@ if __name__ == '__main__':
         discriminator,
         model_losses={
             0: FocalTverskyLoss(alpha=0.9, beta=0.1, gamma=1.5),
+            # 0: FocalTverskyLoss(alpha=0.7, beta=0.3, gamma=1.5)
         },
         model_evals={
             0: 0,
@@ -70,6 +71,7 @@ if __name__ == '__main__':
 
     ckpt_seg_callback = pl.callbacks.ModelCheckpoint(monitor='val/0/jaccard', mode='max')
 
+    # trainer = pl.Trainer(max_epochs=args.n_epochs, val_check_interval=0.25, callbacks=[ckpt_seg_callback])
     trainer = pl.Trainer(max_epochs=args.n_epochs, check_val_every_n_epoch=2, callbacks=[ckpt_seg_callback])
     trainer.fit(da_trainer_module, datamodule=dm)
     trainer.save_checkpoint(args.last_ckpt_path)

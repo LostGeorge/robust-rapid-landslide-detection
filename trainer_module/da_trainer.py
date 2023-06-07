@@ -49,12 +49,19 @@ class plDATrainerModule(pl.LightningModule):
 
 
     def forward(self, inputs: List[torch.Tensor]):
+        '''
+        Returns
+        - seg_out: Dict[int, Tensor] of input index to batch segmentation output maps
+                   Uses self.model_evals to map the input index to the decoder/head index
+        - disc_out: Tensor of discriminator logits
+        - enc_out_embs: List[Tensor] of all input encoder embeddings (average pooled over spatial dims)
+        '''
         enc_out_stages = [self.encoder(x) for x in inputs] # List[List[tensor]]
         enc_out_embs = [torch.cat([F.adaptive_avg_pool2d(stages[j], 1)[:, :, 0, 0] \
              for j in range(1, len(stages))], dim=1) for stages in enc_out_stages]
         disc_out = self.discriminator(torch.cat(enc_out_embs, dim=0))
-        dec_out = [self.models[self.model_evals[i]].decoder(*stages) for i, stages in enumerate(enc_out_stages)]
-        seg_out = [self.models[self.model_evals[i]].segmentation_head(out)[:, 0, ...] for i, out in enumerate(dec_out)]
+        dec_out = {i: self.models[self.model_evals[i]].decoder(*enc_out_stages[i]) for i in self.model_evals.keys()}
+        seg_out = {i: self.models[self.model_evals[i]].segmentation_head(dec_out[i])[:, 0, ...] for i in self.model_evals.keys()}
         return seg_out, disc_out, enc_out_embs
 
     def training_step(self, batch_dict: Dict[int, Tuple], batch_idx: int):
