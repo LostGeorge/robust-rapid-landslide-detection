@@ -29,6 +29,7 @@ class plDATrainerModule(pl.LightningModule):
         self.automatic_optimization = False
         self.save_hyperparameters(logger=False, ignore=['encoder', 'models', 'discriminator'])
         self.encoder = encoder
+        # self.models = torch.nn.ModuleList(models)
         self.models = models
         self.discriminator = discriminator
 
@@ -162,7 +163,7 @@ class plDATrainerModule(pl.LightningModule):
         self.train_epoch_ct += 1
         
 
-    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int):
+    def validation_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0):
         if dataloader_idx not in self.model_evals.keys():
             return
         x, targets = batch

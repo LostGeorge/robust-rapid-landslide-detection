@@ -76,6 +76,8 @@ if __name__ == '__main__':
     trainer = pl.Trainer(max_epochs=args.n_epochs, check_val_every_n_epoch=2, callbacks=[ckpt_seg_callback])
     trainer.fit(da_trainer_module, datamodule=dm)
     trainer.save_checkpoint(args.last_ckpt_path)
+    torch.save(da_trainer_module.models[0].state_dict(), 'temp0.ckpt')
+    torch.save(da_trainer_module.models[1].state_dict(), 'temp1.ckpt')
 
     trainer.validate(datamodule=dm, ckpt_path='best')
     trainer.predict(datamodule=dm, ckpt_path='best')
